@@ -116,8 +116,7 @@ const SEED_PANITIA = [
   {
     id: "USR_admin",
     nama: "Admin",
-    username: "admin",
-    email: "",
+    email: "admin@qurban.app",
     passwordHash: hashPassword("admin1234"),
     role: "admin",
     status: "aktif",
@@ -131,8 +130,8 @@ const SEED_PANITIA = [
   },
 ];
 const SEED_HEWAN = [];
-const SEED_MUDHOHI = [];
-const SEED_MUSTAHIQ = [];
+const SEED_SHOHIBUL_QURBAN = [];
+const SEED_PENERIMA_DAGING = [];
 const SEED_SESI = [];
 const SEED_RAB = [];
 
@@ -303,7 +302,7 @@ function isHewanTerkunci(hewan, session) {
 // ══════════════════════════════════════════════════════════════
 // BR-AUTH-01 ~ BR-AUTH-08
 function LoginPage({ onLogin, panitiaList, setPanitiaList, addLog, onShowSignUp }) {
-  const [loginId, setLoginId] = useState(""); // username atau email
+  const [loginId, setLoginId] = useState(""); // email
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
   const [showPass, setShowPass] = useState(false);
@@ -312,15 +311,12 @@ function LoginPage({ onLogin, panitiaList, setPanitiaList, addLog, onShowSignUp 
 
   const handle = () => {
     const id = loginId.trim().toLowerCase();
-    if (!id || !pass.trim()) { setErr("Username/email dan password wajib diisi."); return; }
+    if (!id || !pass.trim()) { setErr("Email dan password wajib diisi."); return; }
 
-    const isEmail = id.includes("@");
-    const user = isEmail
-      ? panitiaList.find(u => u.email && u.email.toLowerCase() === id)
-      : panitiaList.find(u => u.username === id);
+    const user = panitiaList.find(u => u.email && u.email.toLowerCase() === id);
 
     if (!user) {
-      setErr(isEmail ? "Email tidak ditemukan atau belum didaftarkan." : "Username atau password salah.");
+      setErr("Email tidak ditemukan atau belum didaftarkan.");
       return;
     }
 
@@ -344,7 +340,7 @@ function LoginPage({ onLogin, panitiaList, setPanitiaList, addLog, onShowSignUp 
       const locked = attempts >= 5;
       const lockedUntil = locked ? new Date(Date.now() + 15 * 60 * 1000).toISOString() : null;
       setPanitiaList(prev => prev.map(u => u.id === user.id ? { ...u, loginAttempts: attempts, lockedUntil } : u));
-      setErr("Username/email atau password salah.");
+      setErr("Email atau password salah.");
       addLog(null, "AUTH_LOGIN_FAIL", "AUTH", user.id, user.nama, { attempts });
       if (locked) setLockMsg("Akun dikunci 15 menit karena 5x gagal login.");
       return;
@@ -362,7 +358,7 @@ function LoginPage({ onLogin, panitiaList, setPanitiaList, addLog, onShowSignUp 
       mustChangePassword: user.mustChangePassword || false,
     };
     saveSession(session, remember);
-    addLog(session, "AUTH_LOGIN_OK", "AUTH", user.id, user.nama, { via: isEmail ? "email" : "username" });
+    addLog(session, "AUTH_LOGIN_OK", "AUTH", user.id, user.nama, { via: "email" });
     onLogin(session);
   };
 
@@ -377,7 +373,7 @@ function LoginPage({ onLogin, panitiaList, setPanitiaList, addLog, onShowSignUp 
           <p style={{ color: C.muted, fontSize: 13, marginTop: 6 }}>Sistem Manajemen Qurban Digital · {new Date().getFullYear()} M</p>
         </div>
         <div style={{ ...css.card, padding: 28 }}>
-          <Input label="Username atau Email" value={loginId} onChange={v => { setLoginId(v); setErr(""); setLockMsg(""); }} placeholder="username atau email@contoh.com" onKeyDown={handleKey} />
+          <Input label="Email" value={loginId} onChange={v => { setLoginId(v); setErr(""); setLockMsg(""); }} placeholder="email@contoh.com" onKeyDown={handleKey} />
           <div style={{ marginBottom: 14 }}>
             <label style={css.label}>Password</label>
             <div style={{ position: "relative" }}>
@@ -403,7 +399,7 @@ function LoginPage({ onLogin, panitiaList, setPanitiaList, addLog, onShowSignUp 
           </div>
 
           <div style={{ marginTop: 12, textAlign: "center", fontSize: 12, color: C.muted }}>
-            Hubungi admin jika lupa username, email, atau password.
+            Hubungi admin jika lupa email atau password.
           </div>
         </div>
       </div>
@@ -415,19 +411,18 @@ function LoginPage({ onLogin, panitiaList, setPanitiaList, addLog, onShowSignUp 
 // SIGN UP PAGE
 // ══════════════════════════════════════════════════════════════
 function SignUpPage({ panitiaList, setPanitiaList, inviteCodes, setInviteCodes, onBack, addLog }) {
-  const [form, setForm] = useState({ nama: "", username: "", email: "", password: "", konfirmasi: "", kode: "" });
+  const [form, setForm] = useState({ nama: "", email: "", password: "", konfirmasi: "", kode: "" });
   const [errors, setErrors] = useState({});
   const [showPass, setShowPass] = useState(false);
   const [done, setDone] = useState(false);
-  const [registeredUsername, setRegisteredUsername] = useState("");
+  
 
   const validate = () => {
     const e = {};
     if (!form.nama.trim()) e.nama = "Nama wajib diisi";
-    if (!form.username.trim()) e.username = "Username wajib diisi";
-    else if (/\s/.test(form.username)) e.username = "Username tidak boleh mengandung spasi";
-    else if (panitiaList.some(u => u.username === form.username.toLowerCase())) e.username = "Username sudah dipakai";
-    if (form.email.trim()) {
+
+    if (!form.email.trim()) { e.email = "Email wajib diisi"; }
+    else {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(form.email.trim())) e.email = "Format email tidak valid";
       else if (panitiaList.some(u => u.email && u.email.toLowerCase() === form.email.trim().toLowerCase())) e.email = "Email sudah dipakai akun lain";
@@ -454,7 +449,6 @@ function SignUpPage({ panitiaList, setPanitiaList, inviteCodes, setInviteCodes, 
     const newU = {
       id: "USR_" + Date.now(),
       nama: form.nama.trim(),
-      username: form.username.toLowerCase().trim(),
       email: form.email.trim().toLowerCase(),
       passwordHash: hashPassword(form.password),
       role: "panitia",
@@ -469,9 +463,8 @@ function SignUpPage({ panitiaList, setPanitiaList, inviteCodes, setInviteCodes, 
     };
     setPanitiaList(prev => [...prev, newU]);
     // Tandai kode sudah dipakai
-    setInviteCodes(prev => prev.map(c => c.kode === kode ? { ...c, used: true, usedBy: newU.username, usedAt: now() } : c));
-    addLog(null, "AUTH_SIGNUP_VIA_INVITE", "AUTH", newU.id, newU.nama, { username: newU.username, kode });
-    setRegisteredUsername(newU.username);
+    setInviteCodes(prev => prev.map(c => c.kode === kode ? { ...c, used: true, usedBy: newU.nama, usedAt: now() } : c));
+    addLog(null, "AUTH_SIGNUP_VIA_INVITE", "AUTH", newU.id, newU.nama, { kode });
     setDone(true);
   };
 
@@ -482,7 +475,7 @@ function SignUpPage({ panitiaList, setPanitiaList, inviteCodes, setInviteCodes, 
           <div style={{ fontSize: 64, marginBottom: 16 }}>✅</div>
           <h2 style={{ color: C.white, margin: "0 0 12px" }}>Akun Berhasil Dibuat!</h2>
           <p style={{ color: C.muted, fontSize: 14, lineHeight: 1.6, marginBottom: 24 }}>
-            Akun <strong style={{ color: C.greenLight }}>@{registeredUsername}</strong> sudah aktif. Kamu bisa langsung login sekarang.
+            Akun berhasil dibuat dan sudah aktif. Kamu bisa langsung login sekarang.
           </p>
           <Btn color={C.green} onClick={onBack} style={{ width: "100%", padding: "12px 0" }}>Login Sekarang →</Btn>
         </div>
@@ -500,8 +493,8 @@ function SignUpPage({ panitiaList, setPanitiaList, inviteCodes, setInviteCodes, 
         </div>
         <div style={{ ...css.card, padding: 28 }}>
           <Input label="Nama Lengkap" value={form.nama} onChange={v => setForm(p => ({ ...p, nama: v }))} error={errors.nama} placeholder="Nama lengkap Anda" />
-          <Input label="Username" value={form.username} onChange={v => setForm(p => ({ ...p, username: v.replace(/\s/g, "").toLowerCase() }))} error={errors.username} hint="Lowercase, tanpa spasi" placeholder="contoh: budi123" />
-          <Input label="Email (opsional)" type="email" value={form.email} onChange={v => setForm(p => ({ ...p, email: v }))} error={errors.email} hint="Untuk login via email" placeholder="email@contoh.com" />
+
+          <Input label="Email" type="email" value={form.email} onChange={v => setForm(p => ({ ...p, email: v }))} error={errors.email} hint="Digunakan untuk login" placeholder="email@contoh.com" />
           <div style={{ marginBottom: 14 }}>
             <label style={css.label}>Password</label>
             <div style={{ position: "relative" }}>
@@ -566,31 +559,31 @@ function GantiPasswordModal({ session, setPanitiaList, onDone, addLog }) {
 // ══════════════════════════════════════════════════════════════
 // DASHBOARD
 // ══════════════════════════════════════════════════════════════
-function Dashboard({ hewan, mudhohi, mustahiq, setPage }) {
+function Dashboard({ hewan, shohibulQurban, penerimaDaging, setPage }) {
   const totalHewan = hewan.length;
   const selesai = hewan.filter(h => h.status === "Selesai").length;
-  const lunas = mudhohi.filter(m => m.bayar === "Lunas").length;
-  const belumLunas = mudhohi.filter(m => m.bayar === "Belum Lunas").length;
-  const sudahAmbil = mustahiq.filter(m => m.sudahAmbil).length;
+  const lunas = shohibulQurban.filter(m => m.bayar === "Lunas").length;
+  const belumLunas = shohibulQurban.filter(m => m.bayar === "Belum Lunas").length;
+  const sudahAmbil = penerimaDaging.filter(m => m.sudahAmbil).length;
   const pct = totalHewan ? Math.round((selesai / totalHewan) * 100) : 0;
 
   const statCards = [
     { icon: "🐄", label: "Sapi", value: hewan.filter(h => h.jenis === "Sapi").length, color: C.gold, page: "hewan" },
     { icon: "🐐", label: "Kambing", value: hewan.filter(h => h.jenis === "Kambing").length, color: C.green, page: "hewan" },
     { icon: "🐑", label: "Domba", value: hewan.filter(h => h.jenis === "Domba").length, color: C.purple, page: "hewan" },
-    { icon: "👥", label: "Mudhohi", value: mudhohi.length, color: C.blue, page: "mudhohi" },
-    { icon: "✅", label: "Lunas", value: lunas, color: C.greenLight, page: "mudhohi" },
-    { icon: "⏳", label: "Belum Lunas", value: belumLunas, color: C.red, page: "mudhohi" },
-    { icon: "🤲", label: "Mustahiq", value: mustahiq.length, color: C.orange, page: "mustahiq" },
-    { icon: "🧺", label: "Sudah Ambil", value: sudahAmbil, color: C.greenLight, page: "mustahiq" },
+    { icon: "👥", label: "Shohibul Qurban", value: shohibulQurban.length, color: C.blue, page: "shohibulQurban" },
+    { icon: "✅", label: "Lunas", value: lunas, color: C.greenLight, page: "shohibulQurban" },
+    { icon: "⏳", label: "Belum Lunas", value: belumLunas, color: C.red, page: "shohibulQurban" },
+    { icon: "🤲", label: "Penerima Daging", value: penerimaDaging.length, color: C.orange, page: "penerimaDaging" },
+    { icon: "🧺", label: "Sudah Ambil", value: sudahAmbil, color: C.greenLight, page: "penerimaDaging" },
   ];
 
   return (
     <div>
       <SectionTitle emoji="📊" title="Dashboard" sub="Ringkasan status qurban hari ini" />
       {belumLunas > 0 && (
-        <div onClick={() => setPage("mudhohi")} style={{ ...css.card, borderLeft: `3px solid ${C.red}`, background: "#3B000022", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <div style={{ fontSize: 13, color: C.red }}>⚠️ {belumLunas} mudhohi belum lunas pembayaran</div>
+        <div onClick={() => setPage("shohibulQurban")} style={{ ...css.card, borderLeft: `3px solid ${C.red}`, background: "#3B000022", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div style={{ fontSize: 13, color: C.red }}>⚠️ {belumLunas} shohibulQurban belum lunas pembayaran</div>
           <span style={{ fontSize: 12, color: C.muted }}>Lihat →</span>
         </div>
       )}
@@ -626,11 +619,11 @@ function Dashboard({ hewan, mudhohi, mustahiq, setPage }) {
             <div style={{ fontSize: 12, color: C.muted }}>Sudah Ambil</div>
           </div>
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 24, fontWeight: 900, color: C.red }}>{mustahiq.length - sudahAmbil}</div>
+            <div style={{ fontSize: 24, fontWeight: 900, color: C.red }}>{penerimaDaging.length - sudahAmbil}</div>
             <div style={{ fontSize: 12, color: C.muted }}>Belum Ambil</div>
           </div>
         </div>
-        <ProgressBar value={sudahAmbil} max={mustahiq.length} />
+        <ProgressBar value={sudahAmbil} max={penerimaDaging.length} />
       </div>
       <div style={css.card}>
         <div style={{ fontWeight: 700, color: C.white, marginBottom: 10 }}>🐾 Status Semua Hewan</div>
@@ -657,7 +650,7 @@ function Dashboard({ hewan, mudhohi, mustahiq, setPage }) {
 // ══════════════════════════════════════════════════════════════
 // HEWAN PAGE
 // ══════════════════════════════════════════════════════════════
-function HewanPage({ hewan, setHewan, mudhohi, setMudhohi, session, addLog }) {
+function HewanPage({ hewan, setHewan, shohibulQurban, setShohibulQurban, session, addLog }) {
   const perm = usePermission(session);
   const [tabJenis, setTabJenis] = useState("Sapi");
   const [modal, setModal] = useState(null); // null | "add" | "edit"
@@ -690,8 +683,8 @@ function HewanPage({ hewan, setHewan, mudhohi, setMudhohi, session, addLog }) {
     if (!form.kapasitas || Number(form.kapasitas) < 1) e.kapasitas = "Kapasitas minimal 1";
     // BR-HEWAN-02: kapasitas tidak boleh dikurangi di bawah peserta existing
     if (modal === "edit" && form.id) {
-      const terisi = mudhohi.filter(m => m.hewanId === form.id).length;
-      if (Number(form.kapasitas) < terisi) e.kapasitas = `Kapasitas tidak boleh kurang dari ${terisi} (jumlah mudhohi terdaftar)`;
+      const terisi = shohibulQurban.filter(m => m.hewanId === form.id).length;
+      if (Number(form.kapasitas) < terisi) e.kapasitas = `Kapasitas tidak boleh kurang dari ${terisi} (jumlah shohibulQurban terdaftar)`;
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -742,22 +735,22 @@ function HewanPage({ hewan, setHewan, mudhohi, setMudhohi, session, addLog }) {
     setRollbackAlasan("");
   };
 
-  // BR-HEWAN-03: Hapus — cek mudhohi terdampak, cascade confirm
+  // BR-HEWAN-03: Hapus — cek shohibulQurban terdampak, cascade confirm
   const del = () => {
     const h = hewan.find(x => x.id === confirmId);
-    const terdampak = mudhohi.filter(m => m.hewanId === confirmId).length;
+    const terdampak = shohibulQurban.filter(m => m.hewanId === confirmId).length;
     setHewan(prev => prev.filter(x => x.id !== confirmId));
-    if (terdampak) setMudhohi(prev => prev.filter(m => m.hewanId !== confirmId));
-    addLog(session, "HEWAN_DELETED", "HEWAN", confirmId, h?.nama, { terdampakMudhohi: terdampak });
+    if (terdampak) setShohibulQurban(prev => prev.filter(m => m.hewanId !== confirmId));
+    addLog(session, "HEWAN_DELETED", "HEWAN", confirmId, h?.nama, { terdampakShohibul Qurban: terdampak });
     setConfirmId(null);
-    if (terdampak) showToast(`Hewan dihapus beserta ${terdampak} mudhohi terdampak.`, "err");
+    if (terdampak) showToast(`Hewan dihapus beserta ${terdampak} shohibulQurban terdampak.`, "err");
     else showToast("Hewan berhasil dihapus.");
   };
 
-  const pesertaCount = (hewanId) => mudhohi.filter(m => m.hewanId === hewanId).length;
+  const pesertaCount = (hewanId) => shohibulQurban.filter(m => m.hewanId === hewanId).length;
   const list = hewan.filter(h => h.jenis === tabJenis);
   const confirmingHewan = hewan.find(h => h.id === confirmId);
-  const terdampakCount = confirmId ? mudhohi.filter(m => m.hewanId === confirmId).length : 0;
+  const terdampakCount = confirmId ? shohibulQurban.filter(m => m.hewanId === confirmId).length : 0;
 
   return (
     <div>
@@ -870,7 +863,7 @@ function HewanPage({ hewan, setHewan, mudhohi, setMudhohi, session, addLog }) {
       {confirmId && (
         <ConfirmModal
           pesan={`Yakin hapus "${confirmingHewan?.nama}"?`}
-          detail={terdampakCount > 0 ? `⚠️ ${terdampakCount} mudhohi yang terdaftar juga akan ikut terhapus.` : null}
+          detail={terdampakCount > 0 ? `⚠️ ${terdampakCount} shohibulQurban yang terdaftar juga akan ikut terhapus.` : null}
           onConfirm={del}
           onCancel={() => setConfirmId(null)}
         />
@@ -882,7 +875,7 @@ function HewanPage({ hewan, setHewan, mudhohi, setMudhohi, session, addLog }) {
 // ══════════════════════════════════════════════════════════════
 // NOTIF SEMBELIH MODAL
 // ══════════════════════════════════════════════════════════════
-function NotifSembelihModal({ mudhohi: m, hewanObj, fonnteToken, session, setMudhohi, addLog, onClose }) {
+function NotifSembelihModal({ shohibulQurban: m, hewanObj, fonnteToken, session, setShohibulQurban, addLog, onClose }) {
   const [foto, setFoto] = useState(null);
   const [fotoPreview, setFotoPreview] = useState(null);
   const [pesanCustom, setPesanCustom] = useState("");
@@ -922,8 +915,8 @@ function NotifSembelihModal({ mudhohi: m, hewanObj, fonnteToken, session, setMud
     if (ok) { lastSentRef.current = Date.now(); setResult({ ok: true, msg: "Notifikasi WA berhasil dikirim! ✅" }); }
     else setResult({ ok: false, msg: `Gagal kirim: ${res.reason || "error"}` });
     // BR-WA-02: catat log WA
-    setMudhohi(prev => prev.map(x => x.id === m.id ? { ...x, waLog: [...(x.waLog || []), { waktu: now(), dikirimOleh: session.panitiaId, status: ok ? "ok" : "gagal", reason: res.reason }] } : x));
-    addLog(session, ok ? "MUDHOHI_WA_SENT" : "MUDHOHI_WA_FAILED", "WA", m.id, m.nama, { hp: m.hp, status: ok ? "ok" : "gagal" });
+    setShohibulQurban(prev => prev.map(x => x.id === m.id ? { ...x, waLog: [...(x.waLog || []), { waktu: now(), dikirimOleh: session.panitiaId, status: ok ? "ok" : "gagal", reason: res.reason }] } : x));
+    addLog(session, ok ? "SHOHIBUL_QURBAN_WA_SENT" : "SHOHIBUL_QURBAN_WA_FAILED", "WA", m.id, m.nama, { hp: m.hp, status: ok ? "ok" : "gagal" });
   };
 
   return (
@@ -962,9 +955,9 @@ function NotifSembelihModal({ mudhohi: m, hewanObj, fonnteToken, session, setMud
 }
 
 // ══════════════════════════════════════════════════════════════
-// MUDHOHI PAGE
+// SHOHIBUL_QURBAN PAGE
 // ══════════════════════════════════════════════════════════════
-function MudhohiPage({ mudhohi, setMudhohi, hewan, fonnteToken, session, addLog }) {
+function ShohibulQurbanPage({ shohibulQurban, setShohibulQurban, hewan, fonnteToken, session, addLog }) {
   const perm = usePermission(session);
   const [modal, setModal] = useState(null);
   const [confirmId, setConfirmId] = useState(null);
@@ -986,7 +979,7 @@ function MudhohiPage({ mudhohi, setMudhohi, hewan, fonnteToken, session, addLog 
     setForm(p => ({ ...p, jenisHewan: jenis, hewanId: first?.id || "" }));
   };
 
-  // BR-MUDHOHI-01: validasi format HP
+  // BR-SHOHIBUL_QURBAN-01: validasi format HP
   const validateHP = (hp) => /^08\d{8,12}$/.test(hp.replace(/\s/g, ""));
 
   const validate = () => {
@@ -1009,58 +1002,58 @@ function MudhohiPage({ mudhohi, setMudhohi, hewan, fonnteToken, session, addLog 
     const hewanObj2 = hewan.find(h => h.id === form.hewanId);
     // EC-03: Cek kapasitas
     if (hewanObj2) {
-      const terisi = mudhohi.filter(m => m.hewanId === form.hewanId && m.id !== form.id).length;
+      const terisi = shohibulQurban.filter(m => m.hewanId === form.hewanId && m.id !== form.id).length;
       if (terisi >= Number(hewanObj2.kapasitas)) { showToast(`${hewanObj2.jenis} "${hewanObj2.nama}" sudah penuh.`, "err"); return; }
     }
 
     if (modal === "add") {
       const newM = { ...form, id: "M" + Date.now(), createdBy: session.panitiaId, createdAt: now(), updatedBy: session.panitiaId, updatedAt: now(), cicilanLog: [], waLog: [] };
-      setMudhohi(prev => [...prev, newM]);
-      addLog(session, "MUDHOHI_CREATED", "MUDHOHI", newM.id, newM.nama, { sesudah: newM });
+      setShohibulQurban(prev => [...prev, newM]);
+      addLog(session, "SHOHIBUL_QURBAN_CREATED", "SHOHIBUL_QURBAN", newM.id, newM.nama, { sesudah: newM });
       if (fonnteToken && !skipWA) {
         setSending(true);
         const res = await sendWA(fonnteToken, form.hp, buildWAMsg());
         setSending(false);
-        setMudhohi(prev => prev.map(x => x.id === newM.id ? { ...x, waLog: [{ waktu: now(), dikirimOleh: session.panitiaId, status: res.status ? "ok" : "gagal", reason: res.reason }] } : x));
-        addLog(session, res.status ? "MUDHOHI_WA_SENT" : "MUDHOHI_WA_FAILED", "WA", newM.id, newM.nama, { hp: form.hp });
+        setShohibulQurban(prev => prev.map(x => x.id === newM.id ? { ...x, waLog: [{ waktu: now(), dikirimOleh: session.panitiaId, status: res.status ? "ok" : "gagal", reason: res.reason }] } : x));
+        addLog(session, res.status ? "SHOHIBUL_QURBAN_WA_SENT" : "SHOHIBUL_QURBAN_WA_FAILED", "WA", newM.id, newM.nama, { hp: form.hp });
         showToast("Data disimpan & notif WA terkirim!");
       } else {
         showToast("Data disimpan!");
       }
     } else {
-      const existing = mudhohi.find(m => m.id === form.id);
+      const existing = shohibulQurban.find(m => m.id === form.id);
       const updated = { ...form, updatedBy: session.panitiaId, updatedAt: now(), cicilanLog: existing.cicilanLog, waLog: existing.waLog };
-      setMudhohi(prev => prev.map(m => m.id === form.id ? updated : m));
-      addLog(session, "MUDHOHI_UPDATED", "MUDHOHI", form.id, form.nama, { sebelum: existing, sesudah: updated });
+      setShohibulQurban(prev => prev.map(m => m.id === form.id ? updated : m));
+      addLog(session, "SHOHIBUL_QURBAN_UPDATED", "SHOHIBUL_QURBAN", form.id, form.nama, { sebelum: existing, sesudah: updated });
       showToast("Data diperbarui!");
     }
     setModal(null);
   };
 
-  // BR-MUDHOHI-01: cek duplikat HP (warning)
+  // BR-SHOHIBUL_QURBAN-01: cek duplikat HP (warning)
   const checkDupHP = (hp) => {
     if (!hp || !validateHP(hp)) { setDupWarning(""); return; }
-    const dup = mudhohi.find(m => m.hp === hp && m.id !== form.id);
+    const dup = shohibulQurban.find(m => m.hp === hp && m.id !== form.id);
     setDupWarning(dup ? `⚠️ Nomor HP ini sudah terdaftar atas nama "${dup.nama}" di ${dup.jenisHewan}.` : "");
   };
 
-  // BR-MUDHOHI-05: hapus mudhohi — cek status hewan
+  // BR-SHOHIBUL_QURBAN-05: hapus shohibulQurban — cek status hewan
   const del = () => {
-    const m = mudhohi.find(x => x.id === confirmId);
+    const m = shohibulQurban.find(x => x.id === confirmId);
     const hw = hewan.find(h => h.id === m?.hewanId);
     // Guard: hapus setelah Disembelih hanya admin
     if (hw && ["Disembelih", "Dikuliti", "Selesai"].includes(hw.status) && session.role !== "admin") {
-      showToast("Mudhohi dari hewan yang sudah disembelih hanya bisa dihapus oleh admin.", "err");
+      showToast("Shohibul Qurban dari hewan yang sudah disembelih hanya bisa dihapus oleh admin.", "err");
       setConfirmId(null);
       return;
     }
-    setMudhohi(prev => prev.filter(x => x.id !== confirmId));
-    addLog(session, "MUDHOHI_DELETED", "MUDHOHI", confirmId, m?.nama, {});
+    setShohibulQurban(prev => prev.filter(x => x.id !== confirmId));
+    addLog(session, "SHOHIBUL_QURBAN_DELETED", "SHOHIBUL_QURBAN", confirmId, m?.nama, {});
     setConfirmId(null);
-    showToast("Mudhohi dihapus.");
+    showToast("Shohibul Qurban dihapus.");
   };
 
-  const filtered = mudhohi.filter(m => {
+  const filtered = shohibulQurban.filter(m => {
     const matchSearch = m.nama.toLowerCase().includes(search.toLowerCase()) || m.hp.includes(search);
     const matchBayar = filterBayar === "Semua" || m.bayar === filterBayar;
     const matchJenis = filterJenis === "Semua" || m.jenisHewan === filterJenis;
@@ -1068,18 +1061,18 @@ function MudhohiPage({ mudhohi, setMudhohi, hewan, fonnteToken, session, addLog 
   });
 
   const hewanOptions = hewan.filter(h => h.jenis === form.jenisHewan).map(h => {
-    const terisi = mudhohi.filter(m => m.hewanId === h.id).length;
+    const terisi = shohibulQurban.filter(m => m.hewanId === h.id).length;
     const penuh = terisi >= Number(h.kapasitas);
     return { value: h.id, label: `${h.nama} (${terisi}/${h.kapasitas})${penuh ? " — Penuh" : ""}` };
   });
 
-  const totalTerkumpul = mudhohi.reduce((a, m) => a + Number(m.nominal || 0), 0);
-  const totalLunas = mudhohi.filter(m => m.bayar === "Lunas").length;
+  const totalTerkumpul = shohibulQurban.reduce((a, m) => a + Number(m.nominal || 0), 0);
+  const totalLunas = shohibulQurban.filter(m => m.bayar === "Lunas").length;
 
   return (
     <div>
       <Toast msg={toast.msg} type={toast.type} />
-      <SectionTitle emoji="💳" title="Mudhohi (Peserta)" sub="Kelola data peserta qurban" />
+      <SectionTitle emoji="💳" title="Shohibul Qurban (Peserta)" sub="Kelola data peserta qurban" />
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
         <div style={{ ...css.card, marginBottom: 0, borderLeft: `3px solid ${C.green}`, padding: "12px 16px" }}>
@@ -1088,7 +1081,7 @@ function MudhohiPage({ mudhohi, setMudhohi, hewan, fonnteToken, session, addLog 
         </div>
         <div style={{ ...css.card, marginBottom: 0, borderLeft: `3px solid ${C.blue}`, padding: "12px 16px" }}>
           <div style={{ fontSize: 11, color: C.muted }}>Lunas</div>
-          <div style={{ fontWeight: 900, color: C.blue, fontSize: 15 }}>{totalLunas} / {mudhohi.length}</div>
+          <div style={{ fontWeight: 900, color: C.blue, fontSize: 15 }}>{totalLunas} / {shohibulQurban.length}</div>
         </div>
       </div>
 
@@ -1107,7 +1100,7 @@ function MudhohiPage({ mudhohi, setMudhohi, hewan, fonnteToken, session, addLog 
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, gap: 8 }}>
-        <span style={{ fontSize: 13, color: C.muted }}>{filtered.length} dari {mudhohi.length} peserta</span>
+        <span style={{ fontSize: 13, color: C.muted }}>{filtered.length} dari {shohibulQurban.length} peserta</span>
         <Btn color={C.green} onClick={() => {
           const first = hewan.find(h => h.jenis === "Sapi");
           setForm({ nama: "", hp: "", alamat: "", jenisHewan: "Sapi", hewanId: first?.id || "", bayar: "Lunas", nominal: "" });
@@ -1119,8 +1112,8 @@ function MudhohiPage({ mudhohi, setMudhohi, hewan, fonnteToken, session, addLog 
         <div style={{ ...css.card, textAlign: "center", color: C.muted, padding: "40px 16px" }}>
           <div style={{ fontSize: 32, marginBottom: 8 }}>💳</div>
           {search || filterBayar !== "Semua" || filterJenis !== "Semua"
-            ? <div>Tidak ada mudhohi yang sesuai filter.<br /><button onClick={() => { setSearch(""); setFilterBayar("Semua"); setFilterJenis("Semua"); }} style={{ background: "none", border: "none", color: C.green, cursor: "pointer", marginTop: 8 }}>Reset filter</button></div>
-            : "Belum ada mudhohi terdaftar."
+            ? <div>Tidak ada shohibulQurban yang sesuai filter.<br /><button onClick={() => { setSearch(""); setFilterBayar("Semua"); setFilterJenis("Semua"); }} style={{ background: "none", border: "none", color: C.green, cursor: "pointer", marginTop: 8 }}>Reset filter</button></div>
+            : "Belum ada shohibulQurban terdaftar."
           }
         </div>
       )}
@@ -1148,7 +1141,7 @@ function MudhohiPage({ mudhohi, setMudhohi, hewan, fonnteToken, session, addLog 
                 📲 Notif Sembelih
               </button>
               <Btn color={C.blue} onClick={() => { setForm({ ...m }); setErrors({}); setDupWarning(""); setModal("edit"); }} style={{ fontSize: 13, padding: "8px 14px" }}>Edit</Btn>
-              {/* BR-MUDHOHI-05 + AdminOnly guard */}
+              {/* BR-SHOHIBUL_QURBAN-05 + AdminOnly guard */}
               <AdminOnly session={session}>
                 <Btn color={C.red} onClick={() => setConfirmId(m.id)} style={{ fontSize: 13, padding: "8px 14px" }}>Hapus</Btn>
               </AdminOnly>
@@ -1158,7 +1151,7 @@ function MudhohiPage({ mudhohi, setMudhohi, hewan, fonnteToken, session, addLog 
       })}
 
       {modal && (
-        <Modal onClose={sending ? undefined : () => setModal(null)} title={`${modal === "add" ? "Tambah" : "Edit"} Mudhohi`}>
+        <Modal onClose={sending ? undefined : () => setModal(null)} title={`${modal === "add" ? "Tambah" : "Edit"} Shohibul Qurban`}>
           <fieldset disabled={sending} style={{ border: "none", padding: 0, margin: 0 }}>
             <Input label="Nama Lengkap" value={form.nama} onChange={v => setForm(p => ({ ...p, nama: v }))} error={errors.nama} />
             <div style={{ marginBottom: 14 }}>
@@ -1201,14 +1194,14 @@ function MudhohiPage({ mudhohi, setMudhohi, hewan, fonnteToken, session, addLog 
         </Modal>
       )}
 
-      {confirmId && <ConfirmModal pesan="Yakin hapus data mudhohi ini?" onConfirm={del} onCancel={() => setConfirmId(null)} />}
+      {confirmId && <ConfirmModal pesan="Yakin hapus data shohibulQurban ini?" onConfirm={del} onCancel={() => setConfirmId(null)} />}
       {notifTarget && (
         <NotifSembelihModal
-          mudhohi={notifTarget}
+          shohibulQurban={notifTarget}
           hewanObj={hewan.find(h => h.id === notifTarget.hewanId)}
           fonnteToken={fonnteToken}
           session={session}
-          setMudhohi={setMudhohi}
+          setShohibulQurban={setShohibulQurban}
           addLog={addLog}
           onClose={() => setNotifTarget(null)}
         />
@@ -1218,11 +1211,11 @@ function MudhohiPage({ mudhohi, setMudhohi, hewan, fonnteToken, session, addLog 
 }
 
 // ══════════════════════════════════════════════════════════════
-// MUSTAHIQ PAGE
+// PENERIMA_DAGING PAGE
 // ══════════════════════════════════════════════════════════════
-function MustahiqPage({ mustahiq, setMustahiq, sesi, setSesi, session, addLog }) {
+function PenerimaDagingPage({ penerimaDaging, setPenerimaDaging, sesi, setSesi, session, addLog }) {
   const perm = usePermission(session);
-  const [tab, setTab] = useState("mustahiq");
+  const [tab, setTab] = useState("penerimaDaging");
   const [modal, setModal] = useState(null);
   const [sesiModal, setSesiModal] = useState(null);
   const [confirmId, setConfirmId] = useState(null);
@@ -1235,13 +1228,13 @@ function MustahiqPage({ mustahiq, setMustahiq, sesi, setSesi, session, addLog })
   const [sesiForm, setSesiForm] = useState({ nama: "", jam: "", kuota: "50" });
   const [sesiWarning, setSesiWarning] = useState("");
   const [filterSesi, setFilterSesi] = useState("Semua");
-  const [searchMustahiq, setSearchMustahiq] = useState("");
+  const [searchPenerimaDaging, setSearchPenerima Daging] = useState("");
   const [toast, setToast] = useState({ msg: "", type: "ok" });
   const tandaiLockRef = useRef(false); // EC-10: debounce
 
   const showToast = (msg, type = "ok") => { setToast({ msg, type }); setTimeout(() => setToast({ msg: "", type: "ok" }), 3000); };
 
-  const validateMustahiq = () => {
+  const validatePenerimaDaging = () => {
     const e = {};
     if (!form.nama.trim()) e.nama = "Nama wajib diisi";
     if (form.anggota !== "" && (isNaN(Number(form.anggota)) || Number(form.anggota) < 1)) e.anggota = "Minimal 1 orang";
@@ -1249,18 +1242,18 @@ function MustahiqPage({ mustahiq, setMustahiq, sesi, setSesi, session, addLog })
     return Object.keys(e).length === 0;
   };
 
-  const saveMustahiq = () => {
-    if (!validateMustahiq()) return;
+  const savePenerimaDaging = () => {
+    if (!validatePenerimaDaging()) return;
     if (modal === "add") {
       const newM = { ...form, id: "P" + Date.now(), sudahAmbil: false, createdBy: session.panitiaId, createdAt: now(), updatedBy: session.panitiaId, updatedAt: now(), ambilLog: { ditandaiOleh: null, ditandaiWaktu: null, dibatalkanOleh: null, dibatalkanWaktu: null, alasanBatal: null } };
-      setMustahiq(prev => [...prev, newM]);
-      addLog(session, "MUSTAHIQ_CREATED", "MUSTAHIQ", newM.id, newM.nama, { sesudah: newM });
+      setPenerimaDaging(prev => [...prev, newM]);
+      addLog(session, "PENERIMA_DAGING_CREATED", "PENERIMA_DAGING", newM.id, newM.nama, { sesudah: newM });
       showToast(`${form.nama} berhasil ditambahkan!`);
     } else {
-      const existing = mustahiq.find(m => m.id === form.id);
+      const existing = penerimaDaging.find(m => m.id === form.id);
       const updated = { ...form, sudahAmbil: existing.sudahAmbil, ambilLog: existing.ambilLog, updatedBy: session.panitiaId, updatedAt: now(), createdBy: existing.createdBy, createdAt: existing.createdAt, cicilanLog: existing.cicilanLog, waLog: existing.waLog };
-      setMustahiq(prev => prev.map(m => m.id === form.id ? updated : m));
-      addLog(session, "MUSTAHIQ_UPDATED", "MUSTAHIQ", form.id, form.nama, { sebelum: existing, sesudah: updated });
+      setPenerimaDaging(prev => prev.map(m => m.id === form.id ? updated : m));
+      addLog(session, "PENERIMA_DAGING_UPDATED", "PENERIMA_DAGING", form.id, form.nama, { sebelum: existing, sesudah: updated });
       showToast("Data diperbarui.");
     }
     setModal(null);
@@ -1284,45 +1277,45 @@ function MustahiqPage({ mustahiq, setMustahiq, sesi, setSesi, session, addLog })
   const doTandai = () => {
     if (tandaiLockRef.current) return;
     tandaiLockRef.current = true;
-    const target = mustahiq.find(m => m.id === confirmTandai.id);
+    const target = penerimaDaging.find(m => m.id === confirmTandai.id);
     if (!target) { tandaiLockRef.current = false; return; }
     const sudahAmbilBaru = !target.sudahAmbil;
     const ambilLog = sudahAmbilBaru
       ? { ...target.ambilLog, ditandaiOleh: session.panitiaId, ditandaiWaktu: now() }
       : target.ambilLog; // batalkan ditangani lewat batalModal
-    setMustahiq(prev => prev.map(m => m.id === confirmTandai.id ? { ...m, sudahAmbil: sudahAmbilBaru, ambilLog } : m));
-    addLog(session, "MUSTAHIQ_AMBIL_DITANDAI", "MUSTAHIQ", target.id, target.nama, { sudahAmbil: sudahAmbilBaru });
+    setPenerimaDaging(prev => prev.map(m => m.id === confirmTandai.id ? { ...m, sudahAmbil: sudahAmbilBaru, ambilLog } : m));
+    addLog(session, "PENERIMA_DAGING_AMBIL_DITANDAI", "PENERIMA_DAGING", target.id, target.nama, { sudahAmbil: sudahAmbilBaru });
     showToast(sudahAmbilBaru ? `${confirmTandai.nama} sudah ambil daging.` : "Ditandai ulang.");
     setConfirmTandai(null);
     setTimeout(() => { tandaiLockRef.current = false; }, 1000);
   };
 
-  // BR-AMBIL-02, BR-MUSTAHIQ-04: Batalkan dengan alasan wajib
+  // BR-AMBIL-02, BR-PENERIMA_DAGING-04: Batalkan dengan alasan wajib
   const doBatal = () => {
     if (!batalAlasan.trim()) { showToast("Alasan wajib diisi.", "err"); return; }
-    const target = mustahiq.find(m => m.id === batalModal.id);
+    const target = penerimaDaging.find(m => m.id === batalModal.id);
     const ambilLog = { ...target.ambilLog, dibatalkanOleh: session.panitiaId, dibatalkanWaktu: now(), alasanBatal: batalAlasan };
-    setMustahiq(prev => prev.map(m => m.id === batalModal.id ? { ...m, sudahAmbil: false, ambilLog } : m));
-    addLog(session, "MUSTAHIQ_AMBIL_DIBATALKAN", "MUSTAHIQ", batalModal.id, batalModal.nama, { alasan: batalAlasan });
+    setPenerimaDaging(prev => prev.map(m => m.id === batalModal.id ? { ...m, sudahAmbil: false, ambilLog } : m));
+    addLog(session, "PENERIMA_DAGING_AMBIL_DIBATALKAN", "PENERIMA_DAGING", batalModal.id, batalModal.nama, { alasan: batalAlasan });
     showToast("Pengambilan dibatalkan.");
     setBatalModal(null); setBatalAlasan("");
   };
 
-  // BR-SESI-02: Block hapus sesi jika ada mustahiq
+  // BR-SESI-02: Block hapus sesi jika ada penerimaDaging
   const confirmDelSesi = (id) => {
     const s = sesi.find(x => x.id === id);
-    const dipakai = mustahiq.some(m => m.sesi === s?.nama);
-    if (dipakai) { setSesiWarning("Sesi ini masih dipakai. Pindahkan mustahiq dulu."); return; }
+    const dipakai = penerimaDaging.some(m => m.sesi === s?.nama);
+    if (dipakai) { setSesiWarning("Sesi ini masih dipakai. Pindahkan penerimaDaging dulu."); return; }
     setConfirmSesiId(id);
   };
 
-  // BR-MUSTAHIQ-05: Hapus setelah event dimulai hanya admin
-  const delMustahiq = () => {
-    const m = mustahiq.find(x => x.id === confirmId);
-    setMustahiq(prev => prev.filter(x => x.id !== confirmId));
-    addLog(session, "MUSTAHIQ_DELETED", "MUSTAHIQ", confirmId, m?.nama, {});
+  // BR-PENERIMA_DAGING-05: Hapus setelah event dimulai hanya admin
+  const delPenerimaDaging = () => {
+    const m = penerimaDaging.find(x => x.id === confirmId);
+    setPenerimaDaging(prev => prev.filter(x => x.id !== confirmId));
+    addLog(session, "PENERIMA_DAGING_DELETED", "PENERIMA_DAGING", confirmId, m?.nama, {});
     setConfirmId(null);
-    showToast("Mustahiq dihapus.");
+    showToast("Penerima Daging dihapus.");
   };
 
   const delSesi = () => {
@@ -1333,29 +1326,29 @@ function MustahiqPage({ mustahiq, setMustahiq, sesi, setSesi, session, addLog })
     showToast("Sesi dihapus.");
   };
 
-  const filtered = mustahiq.filter(m => {
+  const filtered = penerimaDaging.filter(m => {
     const matchSesi = filterSesi === "Semua" || m.sesi === filterSesi;
-    const matchSearch = !searchMustahiq || m.nama.toLowerCase().includes(searchMustahiq.toLowerCase()) || m.rt.toLowerCase().includes(searchMustahiq.toLowerCase());
+    const matchSearch = !searchPenerimaDaging || m.nama.toLowerCase().includes(searchPenerimaDaging.toLowerCase()) || m.rt.toLowerCase().includes(searchPenerimaDaging.toLowerCase());
     return matchSesi && matchSearch;
   });
 
   return (
     <div>
       <Toast msg={toast.msg} type={toast.type} />
-      <SectionTitle emoji="🎟️" title="Distribusi Mustahiq" sub="Kelola penerima daging & sesi pengambilan" />
+      <SectionTitle emoji="🎟️" title="Distribusi Penerima Daging" sub="Kelola penerimaDaging & sesi pengambilan" />
       <div style={{ display: "flex", gap: 6, marginBottom: 20 }}>
-        {["mustahiq", "sesi"].map(t => (
+        {["penerimaDaging", "sesi"].map(t => (
           <button key={t} onClick={() => { setTab(t); setSesiWarning(""); }} style={{ ...css.btn(tab === t ? C.green : C.surface, tab === t ? "#fff" : C.muted), border: `1px solid ${C.border}`, fontSize: 13 }}>
-            {t === "mustahiq" ? "🤲 Mustahiq" : "🗓️ Sesi"}
+            {t === "penerimaDaging" ? "🤲 Penerima Daging" : "🗓️ Sesi"}
           </button>
         ))}
       </div>
 
-      {tab === "mustahiq" && (
+      {tab === "penerimaDaging" && (
         <>
           <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4, marginBottom: 14 }}>
             {sesi.map(s => {
-              const peserta = mustahiq.filter(m => m.sesi === s.nama);
+              const peserta = penerimaDaging.filter(m => m.sesi === s.nama);
               const sudah = peserta.filter(m => m.sudahAmbil).length;
               return (
                 <div key={s.id} style={{ ...css.card, marginBottom: 0, minWidth: 160, padding: "12px 14px", flexShrink: 0, borderTop: `3px solid ${C.blue}` }}>
@@ -1369,7 +1362,7 @@ function MustahiqPage({ mustahiq, setMustahiq, sesi, setSesi, session, addLog })
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
-            <input value={searchMustahiq} onChange={e => setSearchMustahiq(e.target.value)} placeholder="🔍 Cari nama atau RT..." style={css.input} />
+            <input value={searchPenerimaDaging} onChange={e => setSearchPenerima Daging(e.target.value)} placeholder="🔍 Cari nama atau RT..." style={css.input} />
             <div style={{ display: "flex", gap: 8 }}>
               <select value={filterSesi} onChange={e => setFilterSesi(e.target.value)} style={{ ...css.select, flex: 1 }}>
                 <option>Semua</option>
@@ -1428,7 +1421,7 @@ function MustahiqPage({ mustahiq, setMustahiq, sesi, setSesi, session, addLog })
           )}
           <Btn color={C.green} onClick={() => { setSesiForm({ nama: "", jam: "", kuota: "50" }); setSesiModal("add"); }} style={{ marginBottom: 14 }}>+ Tambah Sesi</Btn>
           {sesi.map(s => {
-            const peserta = mustahiq.filter(m => m.sesi === s.nama);
+            const peserta = penerimaDaging.filter(m => m.sesi === s.nama);
             const sudah = peserta.filter(m => m.sudahAmbil).length;
             return (
               <div key={s.id} style={{ ...css.card, borderLeft: `3px solid ${C.blue}` }}>
@@ -1458,14 +1451,14 @@ function MustahiqPage({ mustahiq, setMustahiq, sesi, setSesi, session, addLog })
 
       {/* Modals */}
       {modal && (
-        <Modal onClose={() => setModal(null)} title={`${modal === "add" ? "Tambah" : "Edit"} Mustahiq`}>
+        <Modal onClose={() => setModal(null)} title={`${modal === "add" ? "Tambah" : "Edit"} Penerima Daging`}>
           <Input label="Nama" value={form.nama} onChange={v => setForm(p => ({ ...p, nama: v }))} error={errors.nama} />
           <Input label="RT / RW" value={form.rt} onChange={v => setForm(p => ({ ...p, rt: v }))} placeholder="RT 01" />
           <Input label="Alamat" value={form.alamat} onChange={v => setForm(p => ({ ...p, alamat: v }))} />
           <Input label="Jumlah Anggota KK" type="number" value={form.anggota} onChange={v => setForm(p => ({ ...p, anggota: v }))} error={errors.anggota} hint="Minimal 1 orang" />
           <Select label="Sesi Pengambilan" value={form.sesi} onChange={v => setForm(p => ({ ...p, sesi: v }))} options={sesi.map(s => s.nama)} />
           <div style={{ display: "flex", gap: 8 }}>
-            <Btn color={C.green} onClick={saveMustahiq} style={{ flex: 1 }}>Simpan</Btn>
+            <Btn color={C.green} onClick={savePenerimaDaging} style={{ flex: 1 }}>Simpan</Btn>
             <Btn color={C.muted} onClick={() => setModal(null)} style={{ flex: 1 }}>Batal</Btn>
           </div>
         </Modal>
@@ -1504,7 +1497,7 @@ function MustahiqPage({ mustahiq, setMustahiq, sesi, setSesi, session, addLog })
           confirmColor={C.green}
         />
       )}
-      {confirmId && <ConfirmModal pesan="Yakin hapus data mustahiq ini?" onConfirm={delMustahiq} onCancel={() => setConfirmId(null)} />}
+      {confirmId && <ConfirmModal pesan="Yakin hapus data penerimaDaging ini?" onConfirm={delPenerimaDaging} onCancel={() => setConfirmId(null)} />}
       {confirmSesiId && <ConfirmModal pesan="Yakin hapus sesi ini?" onConfirm={delSesi} onCancel={() => setConfirmSesiId(null)} />}
     </div>
   );
@@ -1513,7 +1506,7 @@ function MustahiqPage({ mustahiq, setMustahiq, sesi, setSesi, session, addLog })
 // ══════════════════════════════════════════════════════════════
 // RAB PAGE
 // ══════════════════════════════════════════════════════════════
-function RABPage({ rab, setRab, mudhohi, session, addLog }) {
+function RABPage({ rab, setRab, shohibulQurban, session, addLog }) {
   const perm = usePermission(session);
   const [modal, setModal] = useState(false);
   const [confirmId, setConfirmId] = useState(null);
@@ -1523,7 +1516,7 @@ function RABPage({ rab, setRab, mudhohi, session, addLog }) {
   const KATEGORI = ["Hewan", "Operasional", "Konsumsi", "Lainnya"];
   const KCOLOR = { Hewan: C.gold, Operasional: C.blue, Konsumsi: C.green, Lainnya: C.muted };
 
-  const totalPemasukan = mudhohi.reduce((a, m) => a + Number(m.nominal || 0), 0);
+  const totalPemasukan = shohibulQurban.reduce((a, m) => a + Number(m.nominal || 0), 0);
   const totalPengeluaran = rab.reduce((a, r) => a + Number(r.jumlah || 0), 0);
   const saldo = totalPemasukan - totalPengeluaran;
 
@@ -1653,7 +1646,7 @@ function RABPage({ rab, setRab, mudhohi, session, addLog }) {
 // ══════════════════════════════════════════════════════════════
 function KelolaPanitiaPage({ panitiaList, setPanitiaList, inviteCodes, setInviteCodes, session, addLog }) {
   const [modal, setModal] = useState(null); // "add" | "edit"
-  const [form, setForm] = useState({ nama: "", username: "", email: "", password: "", role: "panitia" });
+  const [form, setForm] = useState({ nama: "", email: "", password: "", role: "panitia" });
   const [errors, setErrors] = useState({});
   const [toast, setToast] = useState({ msg: "", type: "ok" });
   const [tabAktif, setTabAktif] = useState("akun"); // "akun" | "undangan"
@@ -1663,10 +1656,9 @@ function KelolaPanitiaPage({ panitiaList, setPanitiaList, inviteCodes, setInvite
   const validate = () => {
     const e = {};
     if (!form.nama.trim()) e.nama = "Nama wajib diisi";
-    if (!form.username.trim()) e.username = "Username wajib diisi";
-    const dupUser = panitiaList.find(u => u.username === form.username.toLowerCase() && u.id !== form.id);
-    if (dupUser) e.username = "Username sudah dipakai";
-    if (form.email && form.email.trim()) {
+
+    if (!form.email || !form.email.trim()) { e.email = "Email wajib diisi (digunakan untuk login)"; }
+    else {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(form.email.trim())) e.email = "Format email tidak valid";
       else if (panitiaList.some(u => u.email && u.email.toLowerCase() === form.email.trim().toLowerCase() && u.id !== form.id)) e.email = "Email sudah dipakai akun lain";
@@ -1680,7 +1672,7 @@ function KelolaPanitiaPage({ panitiaList, setPanitiaList, inviteCodes, setInvite
   const save = () => {
     if (!validate()) return;
     if (modal === "add") {
-      const newU = { id: "USR_" + Date.now(), nama: form.nama, username: form.username.toLowerCase(), email: form.email ? form.email.trim().toLowerCase() : "", passwordHash: hashPassword(form.password), role: form.role, status: "aktif", mustChangePassword: true, loginAttempts: 0, lockedUntil: null, createdAt: now(), createdBy: session.panitiaId, updatedAt: now(), updatedBy: session.panitiaId };
+      const newU = { id: "USR_" + Date.now(), nama: form.nama, username: "", email: form.email ? form.email.trim().toLowerCase() : "", passwordHash: hashPassword(form.password), role: form.role, status: "aktif", mustChangePassword: true, loginAttempts: 0, lockedUntil: null, createdAt: now(), createdBy: session.panitiaId, updatedAt: now(), updatedBy: session.panitiaId };
       setPanitiaList(prev => [...prev, newU]);
       addLog(session, "AUTH_ACCOUNT_CREATED", "AUTH", newU.id, newU.nama, { role: newU.role });
       showToast(`Akun "${form.nama}" berhasil dibuat.`);
@@ -1690,7 +1682,7 @@ function KelolaPanitiaPage({ panitiaList, setPanitiaList, inviteCodes, setInvite
         const activeAdmins = panitiaList.filter(u => u.role === "admin" && u.status === "aktif" && u.id !== form.id).length;
         if (activeAdmins === 0) { showToast("Harus ada minimal 1 admin aktif.", "err"); return; }
       }
-      const updated = { ...existing, nama: form.nama, username: form.username.toLowerCase(), email: form.email ? form.email.trim().toLowerCase() : (existing.email || ""), role: form.role, updatedAt: now(), updatedBy: session.panitiaId };
+      const updated = { ...existing, nama: form.nama, email: form.email ? form.email.trim().toLowerCase() : (existing.email || ""), role: form.role, updatedAt: now(), updatedBy: session.panitiaId };
       if (form.password) { updated.passwordHash = hashPassword(form.password); updated.mustChangePassword = true; }
       if (existing.role !== form.role) addLog(session, "AUTH_ROLE_CHANGED", "AUTH", form.id, form.nama, { dari: existing.role, ke: form.role });
       setPanitiaList(prev => prev.map(u => u.id === form.id ? updated : u));
@@ -1761,7 +1753,7 @@ function KelolaPanitiaPage({ panitiaList, setPanitiaList, inviteCodes, setInvite
       {/* Tab: Daftar Akun */}
       {tabAktif === "akun" && (
         <div>
-          <Btn color={C.green} onClick={() => { setForm({ nama: "", username: "", email: "", password: "", role: "panitia" }); setErrors({}); setModal("add"); }} style={{ marginBottom: 16 }}>+ Tambah Akun</Btn>
+          <Btn color={C.green} onClick={() => { setForm({ nama: "", email: "", password: "", role: "panitia" }); setErrors({}); setModal("add"); }} style={{ marginBottom: 16 }}>+ Tambah Akun</Btn>
           {aktifList.map(u => (
             <div key={u.id} style={{ ...css.card, borderLeft: `3px solid ${u.status === "aktif" ? C.green : C.muted}`, opacity: u.status === "nonaktif" ? 0.7 : 1 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8 }}>
@@ -1771,7 +1763,6 @@ function KelolaPanitiaPage({ panitiaList, setPanitiaList, inviteCodes, setInvite
                     <Pill text={u.role} color={u.role === "admin" ? C.gold : C.blue} />
                     {u.mustChangePassword && <span style={{ ...css.badge(C.orange), fontSize: 10 }}>Ganti Pass</span>}
                   </div>
-                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>@{u.username}</div>
                   {u.email && <div style={{ fontSize: 11, color: C.blue, marginTop: 2 }}>✉ {u.email}</div>}
                   {u.id === session.panitiaId && <div style={{ fontSize: 11, color: C.greenLight, marginTop: 2 }}>← Akun Anda</div>}
                 </div>
@@ -1815,7 +1806,7 @@ function KelolaPanitiaPage({ panitiaList, setPanitiaList, inviteCodes, setInvite
                         {expired ? "⚠ Kedaluwarsa" : "Berlaku s/d"}: {new Date(inv.expiredAt).toLocaleString("id", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
                       </div>
                     )}
-                    {inv.used && <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Dipakai oleh: @{inv.usedBy}</div>}
+                    {inv.used && <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Dipakai oleh: {inv.usedBy}</div>}
                   </div>
                   <Pill text={statusLabel} color={statusColor} />
                 </div>
@@ -1834,8 +1825,7 @@ function KelolaPanitiaPage({ panitiaList, setPanitiaList, inviteCodes, setInvite
       {modal && (
         <Modal onClose={() => setModal(null)} title={`${modal === "add" ? "Tambah" : "Edit"} Akun`}>
           <Input label="Nama Lengkap" value={form.nama} onChange={v => setForm(p => ({ ...p, nama: v }))} error={errors.nama} />
-          <Input label="Username" value={form.username} onChange={v => setForm(p => ({ ...p, username: v.toLowerCase() }))} error={errors.username} hint="Lowercase, tanpa spasi" />
-          <Input label="Email (opsional, untuk login via email)" type="email" value={form.email || ""} onChange={v => setForm(p => ({ ...p, email: v }))} error={errors.email} hint="Biarkan kosong jika tidak pakai email" />
+          <Input label="Email (untuk login)" type="email" value={form.email || ""} onChange={v => setForm(p => ({ ...p, email: v }))} error={errors.email} />
           <Input label={modal === "add" ? "Password" : "Password Baru (kosongkan jika tidak diubah)"} type="password" value={form.password} onChange={v => setForm(p => ({ ...p, password: v }))} error={errors.password} />
           <Select label="Role" value={form.role} onChange={v => setForm(p => ({ ...p, role: v }))} options={["admin", "panitia"]} />
           <div style={{ display: "flex", gap: 8 }}>
@@ -1856,7 +1846,7 @@ function AuditLogPage({ auditLog, session }) {
   const [filterModul, setFilterModul] = useState("Semua");
   const [search, setSearch] = useState("");
 
-  const MODUL_LIST = ["AUTH", "HEWAN", "MUDHOHI", "MUSTAHIQ", "SESI", "RAB", "WA"];
+  const MODUL_LIST = ["AUTH", "HEWAN", "SHOHIBUL_QURBAN", "PENERIMA_DAGING", "SESI", "RAB", "WA"];
 
   const logs = session.role === "admin"
     ? auditLog
@@ -1871,8 +1861,8 @@ function AuditLogPage({ auditLog, session }) {
   const AKSI_COLOR = {
     AUTH_LOGIN_OK: C.green, AUTH_LOGIN_FAIL: C.red, AUTH_LOGIN_LOCKED: C.red,
     HEWAN_CREATED: C.green, HEWAN_UPDATED: C.blue, HEWAN_DELETED: C.red, HEWAN_STATUS_UPDATED: C.orange, HEWAN_STATUS_ROLLBACK: C.red,
-    MUDHOHI_CREATED: C.green, MUDHOHI_UPDATED: C.blue, MUDHOHI_DELETED: C.red,
-    MUSTAHIQ_AMBIL_DITANDAI: C.green, MUSTAHIQ_AMBIL_DIBATALKAN: C.orange,
+    SHOHIBUL_QURBAN_CREATED: C.green, SHOHIBUL_QURBAN_UPDATED: C.blue, SHOHIBUL_QURBAN_DELETED: C.red,
+    PENERIMA_DAGING_AMBIL_DITANDAI: C.green, PENERIMA_DAGING_AMBIL_DIBATALKAN: C.orange,
     RAB_VERIFIED: C.gold,
   };
 
@@ -2004,7 +1994,7 @@ function ResetDataSection({ session, addLog }) {
   const showToast = (msg, type = "ok") => { setToast({ msg, type }); setTimeout(() => setToast({ msg: "", type: "ok" }), 3000); };
 
   const exportData = () => {
-    const keys = ["qurban_panitia", "qurban_hewan", "qurban_mudhohi", "qurban_mustahiq", "qurban_sesi", "qurban_rab", "qurban_auditlog"];
+    const keys = ["qurban_panitia", "qurban_hewan", "qurban_shohibul_qurban", "qurban_penerima_daging", "qurban_sesi", "qurban_rab", "qurban_auditlog"];
     const data = {};
     keys.forEach(k => { try { data[k] = JSON.parse(localStorage.getItem(k) || "null"); } catch { data[k] = null; } });
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -2020,7 +2010,7 @@ function ResetDataSection({ session, addLog }) {
 
   const doReset = () => {
     if (resetInput !== "RESET") { showToast("Ketik RESET untuk konfirmasi.", "err"); return; }
-    const keys = ["qurban_hewan", "qurban_mudhohi", "qurban_mustahiq", "qurban_sesi", "qurban_rab", "qurban_auditlog", "qurban_token"];
+    const keys = ["qurban_hewan", "qurban_shohibul_qurban", "qurban_penerima_daging", "qurban_sesi", "qurban_rab", "qurban_auditlog", "qurban_token"];
     keys.forEach(k => localStorage.removeItem(k));
     addLog(session, "DATA_RESET", "SETTINGS", "RESET", "Reset Data App", {});
     setShowResetConfirm(false);
@@ -2043,7 +2033,7 @@ function ResetDataSection({ session, addLog }) {
       <div style={{ ...css.card, borderLeft: `3px solid ${C.red}` }}>
         <div style={{ fontWeight: 700, color: C.red, marginBottom: 8 }}>🗑️ Reset Seluruh Data</div>
         <div style={{ fontSize: 13, color: C.muted, marginBottom: 12 }}>
-          Hapus semua data hewan, mudhohi, mustahiq, RAB, dan log. Akun panitia dan token WA tidak ikut dihapus. Aksi ini tidak bisa dibatalkan.
+          Hapus semua data hewan, shohibulQurban, penerimaDaging, RAB, dan log. Akun panitia dan token WA tidak ikut dihapus. Aksi ini tidak bisa dibatalkan.
         </div>
         {!showResetConfirm ? (
           <Btn color={C.red} onClick={() => setShowResetConfirm(true)}>Reset Data...</Btn>
@@ -2068,8 +2058,8 @@ function ResetDataSection({ session, addLog }) {
 const NAV_BASE = [
   { id: "dashboard", emoji: "📊", label: "Dashboard" },
   { id: "hewan", emoji: "🐾", label: "Hewan" },
-  { id: "mudhohi", emoji: "💳", label: "Mudhohi" },
-  { id: "mustahiq", emoji: "🎟️", label: "Mustahiq" },
+  { id: "shohibulQurban", emoji: "💳", label: "Shohibul Qurban" },
+  { id: "penerimaDaging", emoji: "🎟️", label: "Penerima Daging" },
   { id: "rab", emoji: "💰", label: "RAB" },
   { id: "log", emoji: "📋", label: "Log" },
   { id: "settings", emoji: "⚙️", label: "Pengaturan" },
@@ -2095,15 +2085,15 @@ export default function App() {
     if (raw) try { return JSON.parse(raw); } catch {}
     return SEED_HEWAN;
   });
-  const [mudhohi, setMudhohi] = useState(() => {
-    const raw = localStorage.getItem("qurban_mudhohi");
+  const [shohibulQurban, setShohibulQurban] = useState(() => {
+    const raw = localStorage.getItem("qurban_shohibul_qurban");
     if (raw) try { return JSON.parse(raw); } catch {}
-    return SEED_MUDHOHI;
+    return SEED_SHOHIBUL_QURBAN;
   });
-  const [mustahiq, setMustahiq] = useState(() => {
-    const raw = localStorage.getItem("qurban_mustahiq");
+  const [penerimaDaging, setPenerimaDaging] = useState(() => {
+    const raw = localStorage.getItem("qurban_penerima_daging");
     if (raw) try { return JSON.parse(raw); } catch {}
-    return SEED_MUSTAHIQ;
+    return SEED_PENERIMA_DAGING;
   });
   const [sesi, setSesi] = useState(() => {
     const raw = localStorage.getItem("qurban_sesi");
@@ -2121,8 +2111,8 @@ export default function App() {
 
   useEffect(() => { saveStorage("qurban_panitia", panitiaList); }, [panitiaList]);
   useEffect(() => { saveStorage("qurban_hewan", hewan); }, [hewan]);
-  useEffect(() => { saveStorage("qurban_mudhohi", mudhohi); }, [mudhohi]);
-  useEffect(() => { saveStorage("qurban_mustahiq", mustahiq); }, [mustahiq]);
+  useEffect(() => { saveStorage("qurban_shohibul_qurban", shohibulQurban); }, [shohibulQurban]);
+  useEffect(() => { saveStorage("qurban_penerima_daging", penerimaDaging); }, [penerimaDaging]);
   useEffect(() => { saveStorage("qurban_sesi", sesi); }, [sesi]);
   useEffect(() => { saveStorage("qurban_rab", rab); }, [rab]);
   useEffect(() => { saveStorage("qurban_token", fonnteToken); }, [fonnteToken]);
@@ -2211,11 +2201,11 @@ export default function App() {
 
       {/* Pages */}
       <div style={{ maxWidth: 820, margin: "0 auto", padding: "16px 12px 96px" }}>
-        {page === "dashboard" && <Dashboard hewan={hewan} mudhohi={mudhohi} mustahiq={mustahiq} setPage={setPage} />}
-        {page === "hewan" && <HewanPage hewan={hewan} setHewan={setHewan} mudhohi={mudhohi} setMudhohi={setMudhohi} session={session} addLog={addLog} />}
-        {page === "mudhohi" && <MudhohiPage mudhohi={mudhohi} setMudhohi={setMudhohi} hewan={hewan} fonnteToken={fonnteToken} session={session} addLog={addLog} />}
-        {page === "mustahiq" && <MustahiqPage mustahiq={mustahiq} setMustahiq={setMustahiq} sesi={sesi} setSesi={setSesi} session={session} addLog={addLog} />}
-        {page === "rab" && <RABPage rab={rab} setRab={setRab} mudhohi={mudhohi} session={session} addLog={addLog} />}
+        {page === "dashboard" && <Dashboard hewan={hewan} shohibulQurban={shohibulQurban} penerimaDaging={penerimaDaging} setPage={setPage} />}
+        {page === "hewan" && <HewanPage hewan={hewan} setHewan={setHewan} shohibulQurban={shohibulQurban} setShohibulQurban={setShohibulQurban} session={session} addLog={addLog} />}
+        {page === "shohibulQurban" && <ShohibulQurbanPage shohibulQurban={shohibulQurban} setShohibulQurban={setShohibulQurban} hewan={hewan} fonnteToken={fonnteToken} session={session} addLog={addLog} />}
+        {page === "penerimaDaging" && <PenerimaDagingPage penerimaDaging={penerimaDaging} setPenerimaDaging={setPenerimaDaging} sesi={sesi} setSesi={setSesi} session={session} addLog={addLog} />}
+        {page === "rab" && <RABPage rab={rab} setRab={setRab} shohibulQurban={shohibulQurban} session={session} addLog={addLog} />}
         {page === "log" && <AuditLogPage auditLog={auditLog} session={session} />}
         {page === "settings" && <SettingsPage fonnteToken={fonnteToken} setFonnteToken={setFonnteToken} session={session} addLog={addLog} />}
         {page === "panitia" && isAdmin && <KelolaPanitiaPage panitiaList={panitiaList} setPanitiaList={setPanitiaList} inviteCodes={inviteCodes} setInviteCodes={setInviteCodes} session={session} addLog={addLog} />}
