@@ -1,604 +1,483 @@
 // ══════════════════════════════════════════════════════════════
-// AUTH PAGES: Login + Sign Up (Pendaftaran Panitia)
-// Tambahkan komponen ini ke App.jsx, ganti LoginPage yang lama
+// IMPORT EXCEL — Komponen untuk Qurban App
+//
+// Dependensi: tambahkan SheetJS ke project
+//   npm install xlsx
+//   atau pakai CDN di index.html:
+//   <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+//
+// Di React (Artifact/Claude), import dengan:
+//   import * as XLSX from 'xlsx';
 // ══════════════════════════════════════════════════════════════
 
-// ── Konstanta & helpers dari App.jsx yang sudah ada ──────────
-// (sudah tersedia: C, css, hashPassword, verifyPassword, uuid,
-//  now, saveSession, Btn, Input, Toast)
+// Untuk dipakai di Artifact claude.ai (sudah tersedia XLSX global):
+// import * as XLSX from 'xlsx';   ← pakai ini jika pakai npm/vite
 
-// ── Strength meter password ───────────────────────────────────
-function PasswordStrength({ pass }) {
-  if (!pass) return null;
-  const checks = [
-    pass.length >= 8,
-    /[A-Z]/.test(pass),
-    /[0-9]/.test(pass),
-    /[^A-Za-z0-9]/.test(pass),
-  ];
-  const score = checks.filter(Boolean).length;
-  const labels = ["Lemah", "Cukup", "Kuat", "Sangat Kuat"];
-  const colors = [C.red, C.orange, C.gold, C.green];
-  const label = score === 0 ? "" : labels[score - 1];
-  const color = score === 0 ? C.border : colors[score - 1];
-  return (
-    <div style={{ marginTop: 6 }}>
-      <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
-        {[1, 2, 3, 4].map(i => (
-          <div key={i} style={{
-            flex: 1, height: 4, borderRadius: 99,
-            background: i <= score ? color : C.border,
-            transition: "background 0.3s",
-          }} />
-        ))}
-      </div>
-      {label && (
-        <div style={{ fontSize: 11, color, fontFamily: "monospace", letterSpacing: 0.5 }}>
-          {label}
-        </div>
-      )}
-    </div>
-  );
+// ── Validator HP ─────────────────────────────────────────────
+function isValidHP(hp) {
+  if (!hp) return false;
+  return /^08\d{8,12}$/.test(String(hp).replace(/\s|-/g, ""));
 }
 
-// ── Input password dengan toggle show/hide ────────────────────
-function PasswordInput({ label, value, onChange, placeholder = "••••••••", error = "", hint = "", showStrength = false }) {
-  const [show, setShow] = React.useState(false);
-  return (
-    <div style={{ marginBottom: 14 }}>
-      {label && <label style={css.label}>{label}</label>}
-      <div style={{ position: "relative" }}>
-        <input
-          type={show ? "text" : "password"}
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          placeholder={placeholder}
-          style={{ ...css.input, paddingRight: 48, borderColor: error ? C.red : C.border }}
-        />
-        <button
-          type="button"
-          onClick={() => setShow(v => !v)}
-          style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16, lineHeight: 1, padding: 4 }}
-        >
-          {show ? "🙈" : "👁"}
-        </button>
-      </div>
-      {hint && !error && <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>{hint}</div>}
-      {error && <div style={{ fontSize: 11, color: C.red, marginTop: 3 }}>⚠ {error}</div>}
-      {showStrength && <PasswordStrength pass={value} />}
-    </div>
-  );
-}
+// ── Parser sheet Hewan ────────────────────────────────────────
+function parseHewan(rows) {
+  // rows = array of objects dengan key = header kolom
+  const results = { data: [], errors: [] };
+  const JENIS_VALID = ["Sapi", "Kambing", "Domba"];
 
-// ══════════════════════════════════════════════════════════════
-// LOGIN PAGE (pengganti LoginPage lama)
-// ══════════════════════════════════════════════════════════════
-function LoginPage({ onLogin, panitiaList, setPanitiaList, addLog }) {
-  const [tab, setTab] = React.useState("login"); // "login" | "signup"
-  return (
-    <div style={{
-      minHeight: "100vh",
-      background: C.bg,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: 20,
-    }}>
-      <div style={{ width: "100%", maxWidth: 400 }}>
+  rows.forEach((row, idx) => {
+    const lineNo = idx + 4; // baris Excel mulai dari row 4
+    const jenis   = String(row["Jenis *"] || row["Jenis"] || "").trim();
+    const nama    = String(row["Nama Hewan *"] || row["Nama Hewan"] || "").trim();
+    const berat   = Number(row["Berat (kg) *"] || row["Berat (kg)"] || 0);
+    const asal    = String(row["Asal / Peternak"] || "").trim();
+    const harga   = Number(row["Harga (Rp) *"] || row["Harga (Rp)"] || 0);
+    const kapasitas = Number(row["Kapasitas Peserta *"] || row["Kapasitas Peserta"] || 1);
+    const ket     = String(row["Keterangan"] || "").trim();
 
-        {/* Logo */}
-        <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <div style={{ fontSize: 52, marginBottom: 8 }}>🕌</div>
-          <h1 style={{ fontSize: 26, fontWeight: 900, color: C.white, margin: 0, letterSpacing: "-0.5px" }}>
-            Qurban App
-          </h1>
-          <p style={{ color: C.muted, fontSize: 13, marginTop: 6 }}>
-            Sistem Manajemen Qurban Digital · {new Date().getFullYear()} M
-          </p>
-        </div>
+    const rowErrors = [];
+    if (!jenis) rowErrors.push("Jenis kosong");
+    else if (!JENIS_VALID.includes(jenis)) rowErrors.push(`Jenis tidak valid: "${jenis}" (harus Sapi/Kambing/Domba)`);
+    if (!nama) rowErrors.push("Nama Hewan kosong");
+    if (!berat || berat <= 0) rowErrors.push("Berat harus > 0");
+    if (!harga || harga <= 0) rowErrors.push("Harga harus > 0");
+    if (!kapasitas || kapasitas < 1) rowErrors.push("Kapasitas minimal 1");
 
-        {/* Tab switcher */}
-        <div style={{
-          display: "flex",
-          background: C.surface,
-          border: `1px solid ${C.border}`,
-          borderRadius: 12,
-          padding: 4,
-          marginBottom: 20,
-          gap: 4,
-        }}>
-          {[{ id: "login", label: "Masuk" }, { id: "signup", label: "Daftar Akun" }].map(t => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              style={{
-                flex: 1, border: "none", borderRadius: 9,
-                padding: "9px 0",
-                fontWeight: 700, fontSize: 13,
-                cursor: "pointer",
-                background: tab === t.id ? C.green : "transparent",
-                color: tab === t.id ? "#fff" : C.muted,
-                transition: "all 0.2s",
-              }}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+    if (rowErrors.length) {
+      results.errors.push({ baris: lineNo, nama: nama || "(kosong)", masalah: rowErrors });
+      return;
+    }
 
-        {tab === "login"
-          ? <LoginForm onLogin={onLogin} panitiaList={panitiaList} setPanitiaList={setPanitiaList} addLog={addLog} />
-          : <SignUpForm panitiaList={panitiaList} setPanitiaList={setPanitiaList} addLog={addLog} onSuccess={() => setTab("login")} />
-        }
-      </div>
-    </div>
-  );
-}
-
-// ── Form Login ────────────────────────────────────────────────
-function LoginForm({ onLogin, panitiaList, setPanitiaList, addLog }) {
-  const [username, setUsername] = React.useState("");
-  const [pass, setPass] = React.useState("");
-  const [err, setErr] = React.useState("");
-  const [lockMsg, setLockMsg] = React.useState("");
-  const [remember, setRemember] = React.useState(false);
-  const [loading, setLoading] = React.useState(false);
-
-  const handle = () => {
-    if (!username.trim() || !pass.trim()) { setErr("Username dan password wajib diisi."); return; }
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      const user = panitiaList.find(u => u.username === username.toLowerCase().trim());
-      if (!user) { setErr("Username atau password salah."); return; }
-
-      if (user.status === "nonaktif") {
-        setErr("Akun Anda telah dinonaktifkan. Hubungi admin.");
-        addLog(null, "AUTH_LOGIN_LOCKED", "AUTH", user.id, user.nama, { info: "Akun nonaktif" });
-        return;
-      }
-
-      if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
-        const sisa = Math.ceil((new Date(user.lockedUntil) - new Date()) / 60000);
-        setLockMsg(`Akun terkunci. Coba lagi dalam ${sisa} menit.`);
-        addLog(null, "AUTH_LOGIN_LOCKED", "AUTH", user.id, user.nama, { info: "Akun terkunci sementara" });
-        return;
-      }
-
-      if (!verifyPassword(pass, user.passwordHash)) {
-        const attempts = (user.loginAttempts || 0) + 1;
-        const locked = attempts >= 5;
-        const lockedUntil = locked ? new Date(Date.now() + 15 * 60 * 1000).toISOString() : null;
-        setPanitiaList(prev => prev.map(u => u.id === user.id ? { ...u, loginAttempts: attempts, lockedUntil } : u));
-        setErr("Username atau password salah.");
-        addLog(null, "AUTH_LOGIN_FAIL", "AUTH", user.id, user.nama, { attempts });
-        if (locked) setLockMsg("Akun dikunci 15 menit karena 5× gagal login.");
-        return;
-      }
-
-      setPanitiaList(prev => prev.map(u => u.id === user.id ? { ...u, loginAttempts: 0, lockedUntil: null } : u));
-      const session = {
-        panitiaId: user.id, panitiaName: user.nama, role: user.role,
-        loginAt: now(), token: uuid(), mustChangePassword: user.mustChangePassword || false,
-      };
-      saveSession(session, remember);
-      addLog(session, "AUTH_LOGIN_OK", "AUTH", user.id, user.nama, {});
-      onLogin(session);
-    }, 400);
-  };
-
-  return (
-    <div style={{ ...css.card, padding: 24 }}>
-      <Input
-        label="Username"
-        value={username}
-        onChange={v => { setUsername(v); setErr(""); setLockMsg(""); }}
-        placeholder="Masukkan username"
-        onKeyDown={e => e.key === "Enter" && handle()}
-      />
-      <PasswordInput
-        label="Password"
-        value={pass}
-        onChange={v => { setPass(v); setErr(""); }}
-        placeholder="••••••••"
-      />
-
-      <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, cursor: "pointer", fontSize: 13, color: C.muted }}>
-        <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} />
-        Ingat saya (7 hari)
-      </label>
-
-      {(err || lockMsg) && (
-        <div style={{ color: C.red, fontSize: 13, marginBottom: 14, padding: "10px 14px", background: "#3B000033", borderRadius: 8, border: `1px solid ${C.red}33` }}>
-          ⚠️ {lockMsg || err}
-        </div>
-      )}
-
-      <Btn color={C.green} onClick={handle} disabled={loading} style={{ width: "100%", padding: "13px 0", fontSize: 15 }}>
-        {loading ? "⏳ Memproses..." : "Masuk →"}
-      </Btn>
-
-      <div style={{ marginTop: 14, textAlign: "center", fontSize: 12, color: C.muted }}>
-        Hubungi admin jika lupa username atau password.
-      </div>
-    </div>
-  );
-}
-
-// ── Form Sign Up (Daftar Akun Panitia) ────────────────────────
-function SignUpForm({ panitiaList, setPanitiaList, addLog, onSuccess }) {
-  const [form, setForm] = React.useState({ nama: "", username: "", pass: "", pass2: "" });
-  const [errors, setErrors] = React.useState({});
-  const [toast, setToast] = React.useState({ msg: "", type: "ok" });
-  const [loading, setLoading] = React.useState(false);
-
-  const showToast = (msg, type = "ok") => {
-    setToast({ msg, type });
-    setTimeout(() => setToast({ msg: "", type: "ok" }), 3500);
-  };
-
-  const validate = () => {
-    const e = {};
-    if (!form.nama.trim()) e.nama = "Nama lengkap wajib diisi";
-    if (!form.username.trim()) e.username = "Username wajib diisi";
-    else if (form.username.length < 3) e.username = "Minimal 3 karakter";
-    else if (!/^[a-zA-Z0-9_]+$/.test(form.username)) e.username = "Hanya huruf, angka, dan underscore";
-    else if (panitiaList.find(u => u.username === form.username.toLowerCase())) e.username = "Username sudah digunakan";
-    if (!form.pass) e.pass = "Password wajib diisi";
-    else if (form.pass.length < 6) e.pass = "Minimal 6 karakter";
-    if (!form.pass2) e.pass2 = "Konfirmasi password wajib diisi";
-    else if (form.pass !== form.pass2) e.pass2 = "Password tidak cocok";
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
-  const handleSubmit = () => {
-    if (!validate()) return;
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      const newUser = {
-        id: "USR_" + Date.now(),
-        nama: form.nama.trim(),
-        username: form.username.toLowerCase().trim(),
-        passwordHash: hashPassword(form.pass),
-        role: "panitia",
-        status: "aktif",
-        mustChangePassword: false,
-        loginAttempts: 0,
-        lockedUntil: null,
-        createdAt: now(),
-        createdBy: "SELF_REGISTER",
-        updatedAt: now(),
-        updatedBy: "SELF_REGISTER",
-      };
-      setPanitiaList(prev => [...prev, newUser]);
-      addLog(null, "AUTH_REGISTER", "AUTH", newUser.id, newUser.nama, { username: newUser.username });
-      showToast("Akun berhasil dibuat! Silakan masuk.", "ok");
-      setTimeout(() => onSuccess(), 1500);
-    }, 400);
-  };
-
-  const f = (k) => v => setForm(p => ({ ...p, [k]: v }));
-
-  return (
-    <div>
-      <Toast msg={toast.msg} type={toast.type} />
-      <div style={{ ...css.card, padding: 24 }}>
-
-        {/* Info role */}
-        <div style={{ padding: "10px 14px", background: C.greenDark + "55", border: `1px solid ${C.green}33`, borderRadius: 8, marginBottom: 20, fontSize: 12, color: C.greenLight }}>
-          ℹ️ Akun baru otomatis terdaftar sebagai <strong>Panitia</strong>. Untuk hak akses Admin, minta kepada Admin yang sudah ada.
-        </div>
-
-        <Input label="Nama Lengkap" value={form.nama} onChange={f("nama")} placeholder="cth: Budi Santoso" error={errors.nama} />
-        <Input
-          label="Username"
-          value={form.username}
-          onChange={v => { f("username")(v); setErrors(p => ({ ...p, username: "" })); }}
-          placeholder="cth: budi123"
-          error={errors.username}
-          hint="Huruf, angka, dan underscore saja"
-        />
-        <PasswordInput
-          label="Password"
-          value={form.pass}
-          onChange={f("pass")}
-          placeholder="Min. 6 karakter"
-          error={errors.pass}
-          showStrength={true}
-        />
-        <PasswordInput
-          label="Konfirmasi Password"
-          value={form.pass2}
-          onChange={f("pass2")}
-          placeholder="Ulangi password"
-          error={errors.pass2}
-        />
-
-        <Btn color={C.green} onClick={handleSubmit} disabled={loading} style={{ width: "100%", padding: "13px 0", fontSize: 15 }}>
-          {loading ? "⏳ Mendaftar..." : "Buat Akun →"}
-        </Btn>
-      </div>
-    </div>
-  );
-}
-
-
-// ══════════════════════════════════════════════════════════════
-// GLOBAL SEARCH COMPONENT
-// Tambahkan ke root App setelah nav bar, panggil dari semana saja
-// ══════════════════════════════════════════════════════════════
-
-// Fungsi pencarian global — mencari di semua data
-function buildSearchIndex(hewan, mudhohi, mustahiq) {
-  const results = [];
-
-  hewan.forEach(h => {
-    results.push({
-      id: h.id, type: "Hewan", icon: { Sapi: "🐄", Kambing: "🐐", Domba: "🐑" }[h.jenis] || "🐾",
-      title: h.nama,
-      sub: `${h.jenis} · ${h.status} · ${h.berat}kg · Rp ${Number(h.harga).toLocaleString("id")}`,
-      page: "hewan",
-      color: { Sapi: C.gold, Kambing: C.green, Domba: C.purple }[h.jenis] || C.muted,
-      keywords: `${h.nama} ${h.jenis} ${h.status} ${h.asal}`.toLowerCase(),
-    });
-  });
-
-  mudhohi.forEach(m => {
-    results.push({
-      id: m.id, type: "Mudhohi", icon: "💳",
-      title: m.nama,
-      sub: `${m.jenisHewan} · ${m.bayar} · 📱 ${m.hp} · Rp ${Number(m.nominal).toLocaleString("id")}`,
-      page: "mudhohi",
-      color: { Lunas: C.green, "Belum Lunas": C.red, Cicilan: C.orange }[m.bayar] || C.muted,
-      keywords: `${m.nama} ${m.hp} ${m.alamat} ${m.jenisHewan} ${m.bayar}`.toLowerCase(),
-    });
-  });
-
-  mustahiq.forEach(p => {
-    results.push({
-      id: p.id, type: "Mustahiq", icon: "🎟️",
-      title: p.nama,
-      sub: `RT ${p.rt || "-"} · ${p.alamat || "-"} · ${p.sudahAmbil ? "✅ Sudah Ambil" : "⏳ Belum Ambil"}`,
-      page: "mustahiq",
-      color: p.sudahAmbil ? C.green : C.orange,
-      keywords: `${p.nama} ${p.rt} ${p.alamat} ${p.sesi}`.toLowerCase(),
+    const prefix = jenis === "Sapi" ? "S" : jenis === "Kambing" ? "K" : "D";
+    results.data.push({
+      id: prefix + Date.now() + "_" + idx,
+      jenis, nama, berat: String(berat), asal, harga: String(harga),
+      kapasitas: String(kapasitas),
+      keterangan: ket,
+      status: "Menunggu",
+      statusHistory: [],
+      createdBy: "IMPORT_EXCEL",
+      createdAt: new Date().toISOString(),
+      updatedBy: "IMPORT_EXCEL",
+      updatedAt: new Date().toISOString(),
     });
   });
 
   return results;
 }
 
-function GlobalSearch({ hewan, mudhohi, mustahiq, setPage, onClose }) {
-  const [query, setQuery] = React.useState("");
-  const [focused, setFocused] = React.useState(0);
-  const inputRef = React.useRef(null);
+// ── Parser sheet Mudhohi ──────────────────────────────────────
+function parseMudhohi(rows, hewanList) {
+  const results = { data: [], errors: [] };
+  const BAYAR_VALID = ["Lunas", "Belum Lunas", "Cicilan"];
 
-  React.useEffect(() => { inputRef.current?.focus(); }, []);
+  rows.forEach((row, idx) => {
+    const lineNo = idx + 4;
+    const nama      = String(row["Nama Lengkap *"] || row["Nama Lengkap"] || "").trim();
+    const hp        = String(row["No. HP (WA) *"] || row["No. HP"] || row["HP"] || "").replace(/\s|-/g, "");
+    const alamat    = String(row["Alamat / RT-RW"] || row["Alamat"] || "").trim();
+    const jenisHewan= String(row["Jenis Hewan *"] || row["Jenis Hewan"] || "").trim();
+    const namaHewan = String(row["Nama Hewan *"] || row["Nama Hewan"] || "").trim();
+    const bayar     = String(row["Status Bayar *"] || row["Status Bayar"] || "").trim();
+    const nominal   = Number(row["Nominal (Rp) *"] || row["Nominal (Rp)"] || row["Nominal"] || 0);
 
-  const index = React.useMemo(() => buildSearchIndex(hewan, mudhohi, mustahiq), [hewan, mudhohi, mustahiq]);
+    const rowErrors = [];
+    if (!nama) rowErrors.push("Nama kosong");
+    if (!hp) rowErrors.push("No. HP kosong");
+    else if (!isValidHP(hp)) rowErrors.push(`Format HP tidak valid: "${hp}" (harus 08xxxxxxxxxx)`);
+    if (!jenisHewan) rowErrors.push("Jenis Hewan kosong");
+    if (!namaHewan) rowErrors.push("Nama Hewan kosong");
+    if (!bayar) rowErrors.push("Status Bayar kosong");
+    else if (!BAYAR_VALID.includes(bayar)) rowErrors.push(`Status Bayar tidak valid: "${bayar}"`);
+    if (!nominal || nominal <= 0) rowErrors.push("Nominal harus > 0");
 
-  const results = React.useMemo(() => {
-    if (!query.trim()) return [];
-    const q = query.toLowerCase().trim();
-    return index.filter(r => r.keywords.includes(q)).slice(0, 10);
-  }, [query, index]);
+    // Cari hewanId berdasarkan nama hewan
+    const hewanObj = hewanList.find(h =>
+      h.nama.toLowerCase() === namaHewan.toLowerCase() &&
+      h.jenis.toLowerCase() === jenisHewan.toLowerCase()
+    );
+    if (namaHewan && jenisHewan && !hewanObj) {
+      rowErrors.push(`Hewan "${namaHewan}" (${jenisHewan}) tidak ditemukan di sheet Hewan`);
+    }
 
-  React.useEffect(() => { setFocused(0); }, [results]);
+    if (rowErrors.length) {
+      results.errors.push({ baris: lineNo, nama: nama || "(kosong)", masalah: rowErrors });
+      return;
+    }
 
-  const go = (item) => {
-    setPage(item.page);
-    onClose();
+    results.data.push({
+      id: "M" + Date.now() + "_" + idx,
+      nama, hp, alamat,
+      jenisHewan, hewanId: hewanObj?.id || "",
+      bayar, nominal: String(nominal),
+      cicilanLog: [], waLog: [],
+      createdBy: "IMPORT_EXCEL",
+      createdAt: new Date().toISOString(),
+      updatedBy: "IMPORT_EXCEL",
+      updatedAt: new Date().toISOString(),
+    });
+  });
+
+  return results;
+}
+
+// ── Parser sheet Mustahiq ────────────────────────────────────
+function parseMustahiq(rows) {
+  const results = { data: [], errors: [] };
+
+  rows.forEach((row, idx) => {
+    const lineNo = idx + 4;
+    const nama    = String(row["Nama Lengkap *"] || row["Nama Lengkap"] || "").trim();
+    const rt      = String(row["RT"] || "").trim();
+    const alamat  = String(row["Alamat"] || "").trim();
+    const anggota = row["Jumlah Anggota"] ? String(Number(row["Jumlah Anggota"])) : "";
+    const sesi    = String(row["Sesi Pengambilan"] || "").trim();
+    const ket     = String(row["Keterangan"] || "").trim();
+
+    if (!nama) {
+      results.errors.push({ baris: lineNo, nama: "(kosong)", masalah: ["Nama kosong"] });
+      return;
+    }
+
+    results.data.push({
+      id: "P" + Date.now() + "_" + idx,
+      nama, rt, alamat, anggota, sesi, keterangan: ket,
+      sudahAmbil: false,
+      ambilLog: { ditandaiOleh: null, ditandaiWaktu: null, dibatalkanOleh: null, dibatalkanWaktu: null, alasanBatal: null },
+      createdBy: "IMPORT_EXCEL",
+      createdAt: new Date().toISOString(),
+      updatedBy: "IMPORT_EXCEL",
+      updatedAt: new Date().toISOString(),
+    });
+  });
+
+  return results;
+}
+
+// ── Baca sheet dari workbook (skip baris header & contoh) ─────
+function readSheet(wb, sheetName) {
+  const ws = wb.Sheets[sheetName];
+  if (!ws) return null;
+  // Baca dari baris ke-3 (header) seterusnya
+  const raw = XLSX.utils.sheet_to_json(ws, { defval: "", range: 2 }); // range:2 = skip 2 baris pertama (title + instruksi)
+  // Filter baris yang benar-benar kosong
+  return raw.filter(row => Object.values(row).some(v => String(v).trim() !== ""));
+}
+
+// ══════════════════════════════════════════════════════════════
+// KOMPONEN UTAMA: ImportExcelModal
+// ══════════════════════════════════════════════════════════════
+function ImportExcelModal({
+  onClose,
+  onImport,   // callback(hasil) → { hewan, mudhohi, mustahiq }
+  existingHewan = [],
+  existingMudhohi = [],
+  existingMustahiq = [],
+  session,
+  addLog,
+}) {
+  const [step, setStep] = React.useState("upload"); // upload | preview | confirm | done
+  const [file, setFile] = React.useState(null);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [preview, setPreview] = React.useState(null);
+  // { hewan: {data,errors}, mudhohi: {data,errors}, mustahiq: {data,errors} }
+  const [mode, setMode] = React.useState("append"); // append | replace
+  const fileRef = React.useRef();
+
+  const handleFile = async (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    if (!f.name.match(/\.(xlsx|xls)$/i)) {
+      setError("File harus berformat .xlsx atau .xls");
+      return;
+    }
+    setFile(f);
+    setError("");
+    setLoading(true);
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = new Uint8Array(ev.target.result);
+        const wb = XLSX.read(data, { type: "array" });
+
+        const sheetNames = wb.SheetNames;
+        const hasHewan    = sheetNames.some(s => s.toLowerCase().includes("hewan"));
+        const hasMudhohi  = sheetNames.some(s => s.toLowerCase().includes("mudhohi"));
+        const hasMustahiq = sheetNames.some(s => s.toLowerCase().includes("mustahiq"));
+
+        if (!hasHewan && !hasMudhohi && !hasMustahiq) {
+          setError("File tidak dikenali. Pastikan sheet bernama 'Hewan', 'Mudhohi', atau 'Mustahiq'.");
+          setLoading(false);
+          return;
+        }
+
+        const hewanSheet    = sheetNames.find(s => s.toLowerCase().includes("hewan"));
+        const mudhohiSheet  = sheetNames.find(s => s.toLowerCase().includes("mudhohi"));
+        const mustahiqSheet = sheetNames.find(s => s.toLowerCase().includes("mustahiq"));
+
+        const hewanRows    = hewanSheet    ? readSheet(wb, hewanSheet)    : [];
+        const mudhohiRows  = mudhohiSheet  ? readSheet(wb, mudhohiSheet)  : [];
+        const mustahiqRows = mustahiqSheet ? readSheet(wb, mustahiqSheet) : [];
+
+        // Parse — untuk mudhohi, gunakan hasil hewan supaya hewanId terhubung
+        const hewanResult    = parseHewan(hewanRows || []);
+        // Gabungkan hewan existing + hasil import untuk referensi mudhohi
+        const allHewan = [...existingHewan, ...hewanResult.data];
+        const mudhohiResult  = parseMudhohi(mudhohiRows || [], allHewan);
+        const mustahiqResult = parseMustahiq(mustahiqRows || []);
+
+        setPreview({ hewan: hewanResult, mudhohi: mudhohiResult, mustahiq: mustahiqResult });
+        setStep("preview");
+      } catch (err) {
+        setError("Gagal membaca file: " + err.message);
+      }
+      setLoading(false);
+    };
+    reader.readAsArrayBuffer(f);
   };
 
-  const handleKey = (e) => {
-    if (e.key === "ArrowDown") { e.preventDefault(); setFocused(f => Math.min(f + 1, results.length - 1)); }
-    if (e.key === "ArrowUp") { e.preventDefault(); setFocused(f => Math.max(f - 1, 0)); }
-    if (e.key === "Enter" && results[focused]) go(results[focused]);
-    if (e.key === "Escape") onClose();
+  const totalErrors = preview
+    ? preview.hewan.errors.length + preview.mudhohi.errors.length + preview.mustahiq.errors.length
+    : 0;
+  const totalImport = preview
+    ? preview.hewan.data.length + preview.mudhohi.data.length + preview.mustahiq.data.length
+    : 0;
+
+  const doImport = () => {
+    if (!preview) return;
+    const hasil = {
+      hewan:    mode === "replace" ? preview.hewan.data    : [...existingHewan,    ...preview.hewan.data],
+      mudhohi:  mode === "replace" ? preview.mudhohi.data  : [...existingMudhohi,  ...preview.mudhohi.data],
+      mustahiq: mode === "replace" ? preview.mustahiq.data : [...existingMustahiq, ...preview.mustahiq.data],
+    };
+    onImport(hasil);
+    addLog && addLog(session, "IMPORT_EXCEL", "IMPORT", file?.name, file?.name, {
+      hewan: preview.hewan.data.length,
+      mudhohi: preview.mudhohi.data.length,
+      mustahiq: preview.mustahiq.data.length,
+      mode,
+    });
+    setStep("done");
   };
 
-  const typeColors = { Hewan: C.gold, Mudhohi: C.blue, Mustahiq: C.orange };
-
-  return (
-    <div
-      style={{ position: "fixed", inset: 0, background: "#000000CC", zIndex: 200, display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 60 }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div style={{
-        background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16,
-        width: "100%", maxWidth: 520, margin: "0 16px",
-        overflow: "hidden", boxShadow: "0 24px 80px #00000088",
-      }}>
-
-        {/* Search input */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", borderBottom: `1px solid ${C.border}` }}>
-          <span style={{ fontSize: 20 }}>🔍</span>
-          <input
-            ref={inputRef}
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            onKeyDown={handleKey}
-            placeholder="Cari hewan, mudhohi, mustahiq..."
-            style={{ ...css.input, border: "none", background: "transparent", padding: 0, fontSize: 16 }}
-          />
-          {query && (
-            <button onClick={() => setQuery("")} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 18, lineHeight: 1, flexShrink: 0 }}>✕</button>
-          )}
-          <button onClick={onClose} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 6, color: C.muted, cursor: "pointer", fontSize: 11, padding: "3px 7px", flexShrink: 0, fontFamily: "monospace" }}>Esc</button>
-        </div>
-
-        {/* Shortcut hint — saat query kosong */}
-        {!query && (
-          <div style={{ padding: "20px 18px" }}>
-            <div style={{ fontSize: 12, color: C.muted, marginBottom: 14, letterSpacing: 0.5, fontFamily: "monospace", textTransform: "uppercase" }}>Cari Cepat</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {[
-                { icon: "🐄", label: "Hewan", color: C.gold },
-                { icon: "💳", label: "Mudhohi", color: C.blue },
-                { icon: "🎟️", label: "Mustahiq", color: C.orange },
-              ].map(s => (
-                <button
-                  key={s.label}
-                  onClick={() => setQuery(s.label.toLowerCase())}
-                  style={{
-                    background: s.color + "22", border: `1px solid ${s.color}44`,
-                    borderRadius: 8, padding: "8px 14px",
-                    color: s.color, fontSize: 13, cursor: "pointer",
-                    display: "flex", alignItems: "center", gap: 6,
-                  }}
-                >
-                  {s.icon} Semua {s.label}
-                </button>
-              ))}
-            </div>
-            <div style={{ marginTop: 14, fontSize: 12, color: C.muted }}>
-              Total data: {hewan.length} hewan · {mudhohi.length} mudhohi · {mustahiq.length} mustahiq
-            </div>
-          </div>
-        )}
-
-        {/* Hasil pencarian */}
-        {query && results.length === 0 && (
-          <div style={{ padding: "32px 18px", textAlign: "center", color: C.muted, fontSize: 14 }}>
-            <div style={{ fontSize: 32, marginBottom: 8 }}>🔍</div>
-            Tidak ada hasil untuk "<strong style={{ color: C.text }}>{query}</strong>"
-          </div>
-        )}
-
-        {results.length > 0 && (
-          <div style={{ maxHeight: 420, overflowY: "auto" }}>
-            {/* Group by type */}
-            {["Hewan", "Mudhohi", "Mustahiq"].map(type => {
-              const group = results.filter(r => r.type === type);
-              if (!group.length) return null;
-              return (
-                <div key={type}>
-                  <div style={{ padding: "8px 18px 4px", fontSize: 10, color: typeColors[type] || C.muted, fontFamily: "monospace", letterSpacing: 1.5, textTransform: "uppercase" }}>
-                    {type} ({group.length})
-                  </div>
-                  {group.map((item, idx) => {
-                    const globalIdx = results.indexOf(item);
-                    const isActive = focused === globalIdx;
-                    return (
-                      <button
-                        key={item.id}
-                        onClick={() => go(item)}
-                        onMouseEnter={() => setFocused(globalIdx)}
-                        style={{
-                          display: "flex", alignItems: "center", gap: 12,
-                          width: "100%", textAlign: "left",
-                          padding: "11px 18px",
-                          background: isActive ? C.green + "22" : "transparent",
-                          border: "none", cursor: "pointer",
-                          borderLeft: `3px solid ${isActive ? item.color : "transparent"}`,
-                          transition: "background 0.1s",
-                        }}
-                      >
-                        <span style={{ fontSize: 20, flexShrink: 0 }}>{item.icon}</span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontWeight: 700, fontSize: 14, color: C.white, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {item.title}
-                          </div>
-                          <div style={{ fontSize: 12, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 1 }}>
-                            {item.sub}
-                          </div>
-                        </div>
-                        <div style={{ fontSize: 10, color: item.color, fontFamily: "monospace", letterSpacing: 0.5, flexShrink: 0, background: item.color + "22", padding: "2px 8px", borderRadius: 99 }}>
-                          {item.type}
-                        </div>
-                        {isActive && <span style={{ fontSize: 12, color: C.muted }}>↵</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Footer */}
-        <div style={{ padding: "8px 18px", borderTop: `1px solid ${C.border}`, display: "flex", gap: 14, fontSize: 11, color: C.muted, fontFamily: "monospace" }}>
-          <span>↑↓ Navigasi</span>
-          <span>↵ Buka</span>
-          <span>Esc Tutup</span>
-        </div>
-      </div>
+  // ── UI helpers ──────────────────────────────────────────────
+  const SummaryCard = ({ icon, label, count, errors, color }) => (
+    <div style={{
+      background: count > 0 ? color + "18" : "#0A0D09",
+      border: `1px solid ${count > 0 ? color + "44" : C.border}`,
+      borderRadius: 10, padding: "12px 16px", flex: 1, minWidth: 100,
+    }}>
+      <div style={{ fontSize: 22, marginBottom: 4 }}>{icon}</div>
+      <div style={{ fontWeight: 900, fontSize: 22, color: count > 0 ? color : C.muted }}>{count}</div>
+      <div style={{ fontSize: 11, color: C.muted }}>{label}</div>
+      {errors > 0 && (
+        <div style={{ fontSize: 11, color: C.red, marginTop: 4 }}>⚠ {errors} error</div>
+      )}
     </div>
   );
-}
 
-// ── Tombol pencarian untuk top bar ────────────────────────────
-// Tambahkan state ini di root App:
-//   const [showSearch, setShowSearch] = useState(false);
-//
-// Tambahkan tombol ini di top bar (sebelum tombol Keluar):
-function SearchButton({ onClick }) {
+  const ErrorList = ({ errors, label }) => {
+    if (!errors?.length) return null;
+    return (
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 12, color: C.red, fontWeight: 700, marginBottom: 6 }}>
+          ⚠ Error di sheet {label} ({errors.length} baris):
+        </div>
+        {errors.slice(0, 5).map((e, i) => (
+          <div key={i} style={{
+            fontSize: 12, color: C.orange,
+            background: "#3B000022", borderRadius: 6, padding: "6px 10px", marginBottom: 4,
+          }}>
+            <strong>Baris {e.baris}</strong> ({e.nama}): {e.masalah.join(", ")}
+          </div>
+        ))}
+        {errors.length > 5 && (
+          <div style={{ fontSize: 11, color: C.muted }}>...dan {errors.length - 5} error lainnya</div>
+        )}
+      </div>
+    );
+  };
+
   return (
-    <button
-      onClick={onClick}
-      style={{
-        background: C.surface,
-        border: `1px solid ${C.border}`,
-        borderRadius: 8,
-        color: C.muted,
-        cursor: "pointer",
-        fontSize: 13,
-        padding: "6px 12px",
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        minHeight: 36,
-      }}
-    >
-      🔍 <span style={{ fontSize: 11, fontFamily: "monospace", color: C.muted }}>Ctrl+K</span>
-    </button>
+    <Modal onClose={onClose} title="📥 Import dari Excel">
+
+      {/* STEP: UPLOAD */}
+      {step === "upload" && (
+        <div>
+          {/* Drop zone */}
+          <div
+            onClick={() => fileRef.current?.click()}
+            style={{
+              border: `2px dashed ${error ? C.red : C.green}`,
+              borderRadius: 12, padding: "32px 20px",
+              textAlign: "center", cursor: "pointer",
+              background: "#0A0D09",
+              marginBottom: 16,
+              transition: "border-color 0.2s",
+            }}
+          >
+            <div style={{ fontSize: 40, marginBottom: 8 }}>📂</div>
+            <div style={{ fontWeight: 700, color: C.white, marginBottom: 4 }}>
+              {file ? file.name : "Klik untuk pilih file Excel"}
+            </div>
+            <div style={{ fontSize: 12, color: C.muted }}>
+              Format: .xlsx atau .xls · Gunakan template yang sudah disediakan
+            </div>
+            <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={handleFile} style={{ display: "none" }} />
+          </div>
+
+          {error && (
+            <div style={{ color: C.red, fontSize: 13, marginBottom: 14, padding: "10px 14px", background: "#3B000033", borderRadius: 8 }}>
+              ⚠️ {error}
+            </div>
+          )}
+
+          {loading && (
+            <div style={{ textAlign: "center", color: C.muted, padding: 16, fontSize: 14 }}>
+              ⏳ Membaca file...
+            </div>
+          )}
+
+          <div style={{ padding: "12px 16px", background: C.greenDark + "44", borderRadius: 8, border: `1px solid ${C.green}33`, fontSize: 12, color: C.greenLight }}>
+            💡 Belum punya template? Download template Excel di menu Pengaturan → Template Excel
+          </div>
+        </div>
+      )}
+
+      {/* STEP: PREVIEW */}
+      {step === "preview" && preview && (
+        <div>
+          <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>
+            📄 <strong style={{ color: C.white }}>{file?.name}</strong>
+          </div>
+
+          {/* Summary cards */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+            <SummaryCard icon="🐾" label="Hewan"    count={preview.hewan.data.length}    errors={preview.hewan.errors.length}    color={C.gold} />
+            <SummaryCard icon="💳" label="Mudhohi"  count={preview.mudhohi.data.length}  errors={preview.mudhohi.errors.length}  color={C.blue} />
+            <SummaryCard icon="🎟️" label="Mustahiq" count={preview.mustahiq.data.length} errors={preview.mustahiq.errors.length} color={C.orange} />
+          </div>
+
+          {/* Errors */}
+          {totalErrors > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <ErrorList errors={preview.hewan.errors}    label="Hewan" />
+              <ErrorList errors={preview.mudhohi.errors}  label="Mudhohi" />
+              <ErrorList errors={preview.mustahiq.errors} label="Mustahiq" />
+              <div style={{ fontSize: 12, color: C.orange, padding: "8px 12px", background: "#3B1A0022", borderRadius: 8, border: `1px solid ${C.orange}33` }}>
+                ⚠️ Baris yang error akan <strong>dilewati</strong>. Hanya {totalImport} data valid yang akan diimport.
+              </div>
+            </div>
+          )}
+
+          {totalImport === 0 && (
+            <div style={{ color: C.red, fontSize: 14, textAlign: "center", padding: 16 }}>
+              ❌ Tidak ada data valid yang bisa diimport.
+            </div>
+          )}
+
+          {/* Mode pilihan */}
+          {totalImport > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <label style={css.label}>Mode Import</label>
+              <div style={{ display: "flex", gap: 8 }}>
+                {[
+                  { val: "append", icon: "➕", label: "Tambahkan ke data yang ada" },
+                  { val: "replace", icon: "🔄", label: "Ganti semua data (hapus yang lama)" },
+                ].map(m => (
+                  <button
+                    key={m.val}
+                    onClick={() => setMode(m.val)}
+                    style={{
+                      flex: 1, padding: "10px 8px", borderRadius: 8, cursor: "pointer",
+                      background: mode === m.val ? (m.val === "replace" ? C.red + "22" : C.green + "22") : "#0A0D09",
+                      border: `1px solid ${mode === m.val ? (m.val === "replace" ? C.red : C.green) : C.border}`,
+                      color: mode === m.val ? (m.val === "replace" ? C.red : C.greenLight) : C.muted,
+                      fontSize: 12, fontWeight: mode === m.val ? 700 : 400,
+                    }}
+                  >
+                    {m.icon} {m.label}
+                  </button>
+                ))}
+              </div>
+              {mode === "replace" && (
+                <div style={{ fontSize: 12, color: C.red, marginTop: 6 }}>
+                  ⚠️ Semua data hewan, mudhohi, dan mustahiq yang sudah ada akan dihapus!
+                </div>
+              )}
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 8 }}>
+            <Btn color={C.muted} onClick={() => setStep("upload")} style={{ flex: 1 }}>← Kembali</Btn>
+            {totalImport > 0 && (
+              <Btn color={mode === "replace" ? C.red : C.green} onClick={doImport} style={{ flex: 2 }}>
+                {mode === "replace" ? "⚠️" : "✅"} Import {totalImport} Data
+              </Btn>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* STEP: DONE */}
+      {step === "done" && (
+        <div style={{ textAlign: "center", padding: "20px 0" }}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
+          <h3 style={{ color: C.white, marginBottom: 8 }}>Import Berhasil!</h3>
+          <div style={{ color: C.muted, fontSize: 14, marginBottom: 20 }}>
+            {preview.hewan.data.length} hewan · {preview.mudhohi.data.length} mudhohi · {preview.mustahiq.data.length} mustahiq berhasil diimport.
+          </div>
+          <Btn color={C.green} onClick={onClose} style={{ width: "100%" }}>Tutup</Btn>
+        </div>
+      )}
+    </Modal>
   );
 }
-
-// ── Keyboard shortcut Ctrl+K ──────────────────────────────────
-// Tambahkan useEffect ini di root App:
-//
-// useEffect(() => {
-//   const handler = (e) => {
-//     if ((e.ctrlKey || e.metaKey) && e.key === "k") {
-//       e.preventDefault();
-//       setShowSearch(true);
-//     }
-//   };
-//   window.addEventListener("keydown", handler);
-//   return () => window.removeEventListener("keydown", handler);
-// }, []);
 
 
 // ══════════════════════════════════════════════════════════════
 // CARA INTEGRASI KE App.jsx
 // ══════════════════════════════════════════════════════════════
 //
-// 1. Copy semua komponen di atas ke App.jsx
-//    (PasswordStrength, PasswordInput, LoginPage baru, LoginForm,
-//     SignUpForm, buildSearchIndex, GlobalSearch, SearchButton)
+// 1. Copy komponen ImportExcelModal ke App.jsx
 //
-// 2. Hapus LoginPage yang lama dari App.jsx
+// 2. Install SheetJS:
+//    npm install xlsx
+//    Lalu tambahkan di atas App.jsx:
+//    import * as XLSX from 'xlsx';
 //
-// 3. Di root App(), tambahkan state:
-//    const [showSearch, setShowSearch] = useState(false);
+// 3. Di SettingsPage atau halaman manapun, tambahkan state:
+//    const [showImport, setShowImport] = useState(false);
 //
-// 4. Tambahkan useEffect keyboard shortcut (lihat komentar di atas)
+// 4. Tambahkan tombol Import:
+//    <Btn color={C.blue} onClick={() => setShowImport(true)}>
+//      📥 Import dari Excel
+//    </Btn>
 //
-// 5. Di JSX root App, di dalam top bar, tambahkan SearchButton:
-//    <SearchButton onClick={() => setShowSearch(true)} />
-//
-// 6. Di JSX root App, setelah top bar / nav bar, tambahkan:
-//    {showSearch && (
-//      <GlobalSearch
-//        hewan={hewan}
-//        mudhohi={mudhohi}
-//        mustahiq={mustahiq}
-//        setPage={setPage}
-//        onClose={() => setShowSearch(false)}
+// 5. Tambahkan modal:
+//    {showImport && (
+//      <ImportExcelModal
+//        onClose={() => setShowImport(false)}
+//        onImport={(hasil) => {
+//          setHewan(hasil.hewan);
+//          setMudhohi(hasil.mudhohi);
+//          setMustahiq(hasil.mustahiq);
+//          setShowImport(false);
+//        }}
+//        existingHewan={hewan}
+//        existingMudhohi={mudhohi}
+//        existingMustahiq={mustahiq}
+//        session={session}
+//        addLog={addLog}
 //      />
 //    )}
 //
+// 6. (Opsional) Tombol download template di Pengaturan:
+//    Simpan file template_qurban.xlsx di /public/,
+//    lalu buat link:
+//    <a href="/template_qurban.xlsx" download>
+//      📋 Download Template Excel
+//    </a>
 // ══════════════════════════════════════════════════════════════
