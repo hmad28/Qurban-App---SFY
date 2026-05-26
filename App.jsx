@@ -589,10 +589,10 @@ function Dashboard({ hewan, mudhohi, mustahiq, setPage }) {
     { icon: "🐄", label: "Sapi", value: hewan.filter(h => h.jenis === "Sapi").length, color: C.gold, page: "hewan" },
     { icon: "🐐", label: "Kambing", value: hewan.filter(h => h.jenis === "Kambing").length, color: C.green, page: "hewan" },
     { icon: "🐑", label: "Domba", value: hewan.filter(h => h.jenis === "Domba").length, color: C.purple, page: "hewan" },
-    { icon: "👥", label: "Mudhohi", value: mudhohi.length, color: C.blue, page: "mudhohi" },
+    { icon: "👥", label: "Shohibul Qurban", value: mudhohi.length, color: C.blue, page: "mudhohi" },
     { icon: "✅", label: "Lunas", value: lunas, color: C.greenLight, page: "mudhohi" },
     { icon: "⏳", label: "Belum Lunas", value: belumLunas, color: C.red, page: "mudhohi" },
-    { icon: "🤲", label: "Mustahiq", value: mustahiq.length, color: C.orange, page: "mustahiq" },
+    { icon: "🤲", label: "Penerima Daging", value: mustahiq.length, color: C.orange, page: "mustahiq" },
     { icon: "🧺", label: "Sudah Ambil", value: sudahAmbil, color: C.greenLight, page: "mustahiq" },
   ];
 
@@ -601,7 +601,7 @@ function Dashboard({ hewan, mudhohi, mustahiq, setPage }) {
       <SectionTitle emoji="📊" title="Dashboard" sub="Ringkasan status qurban hari ini" />
       {belumLunas > 0 && (
         <div onClick={() => setPage("mudhohi")} style={{ ...css.card, borderLeft: `3px solid ${C.red}`, background: "#3B000022", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <div style={{ fontSize: 13, color: C.red }}>⚠️ {belumLunas} mudhohi belum lunas pembayaran</div>
+          <div style={{ fontSize: 13, color: C.red }}>⚠️ {belumLunas} shohibul qurban belum lunas pembayaran</div>
           <span style={{ fontSize: 12, color: C.muted }}>Lihat →</span>
         </div>
       )}
@@ -702,7 +702,7 @@ function HewanPage({ hewan, setHewan, mudhohi, setMudhohi, session, addLog }) {
     // BR-HEWAN-02: kapasitas tidak boleh dikurangi di bawah peserta existing
     if (modal === "edit" && form.id) {
       const terisi = mudhohi.filter(m => m.hewanId === form.id).length;
-      if (Number(form.kapasitas) < terisi) e.kapasitas = `Kapasitas tidak boleh kurang dari ${terisi} (jumlah mudhohi terdaftar)`;
+      if (Number(form.kapasitas) < terisi) e.kapasitas = `Kapasitas tidak boleh kurang dari ${terisi} (jumlah shohibul qurban terdaftar)`;
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -760,7 +760,7 @@ function HewanPage({ hewan, setHewan, mudhohi, setMudhohi, session, addLog }) {
     setRollbackAlasan("");
   };
 
-  // BR-HEWAN-03: Hapus — cek mudhohi terdampak, cascade confirm
+  // BR-HEWAN-03: Hapus — cek shohibul qurban terdampak, cascade confirm
   const del = () => {
     const h = hewan.find(x => x.id === confirmId);
     const terdampak = mudhohi.filter(m => m.hewanId === confirmId).length;
@@ -768,7 +768,7 @@ function HewanPage({ hewan, setHewan, mudhohi, setMudhohi, session, addLog }) {
     if (terdampak) setMudhohi(prev => prev.filter(m => m.hewanId !== confirmId));
     addLog(session, "HEWAN_DELETED", "HEWAN", confirmId, h?.nama, { terdampakMudhohi: terdampak });
     setConfirmId(null);
-    if (terdampak) showToast(`Hewan dihapus beserta ${terdampak} mudhohi terdampak.`, "err");
+    if (terdampak) showToast(`Hewan dihapus beserta ${terdampak} shohibul qurban terdampak.`, "err");
     else showToast("Hewan berhasil dihapus.");
   };
 
@@ -888,7 +888,7 @@ function HewanPage({ hewan, setHewan, mudhohi, setMudhohi, session, addLog }) {
       {confirmId && (
         <ConfirmModal
           pesan={`Yakin hapus "${confirmingHewan?.nama}"?`}
-          detail={terdampakCount > 0 ? `⚠️ ${terdampakCount} mudhohi yang terdaftar juga akan ikut terhapus.` : null}
+          detail={terdampakCount > 0 ? `⚠️ ${terdampakCount} shohibul qurban yang terdaftar juga akan ikut terhapus.` : null}
           onConfirm={del}
           onCancel={() => setConfirmId(null)}
         />
@@ -1079,20 +1079,20 @@ function MudhohiPage({ mudhohi, setMudhohi, hewan, fonnteToken, session, addLog 
     setDupWarning(dup ? `⚠️ Nomor HP ini sudah terdaftar atas nama "${dup.nama}" di ${dup.jenisHewan}.` : "");
   };
 
-  // BR-MUDHOHI-05: hapus mudhohi — cek status hewan
+  // BR-MUDHOHI-05: hapus shohibul qurban — cek status hewan
   const del = () => {
     const m = mudhohi.find(x => x.id === confirmId);
     const hw = hewan.find(h => h.id === m?.hewanId);
     // Guard: hapus setelah Disembelih hanya admin
     if (hw && ["Disembelih", "Dikuliti", "Selesai"].includes(hw.status) && session.role !== "admin") {
-      showToast("Mudhohi dari hewan yang sudah disembelih hanya bisa dihapus oleh admin.", "err");
+      showToast("Shohibul qurban dari hewan yang sudah disembelih hanya bisa dihapus oleh admin.", "err");
       setConfirmId(null);
       return;
     }
     setMudhohi(prev => prev.filter(x => x.id !== confirmId));
     addLog(session, "MUDHOHI_DELETED", "MUDHOHI", confirmId, m?.nama, {});
     setConfirmId(null);
-    showToast("Mudhohi dihapus.");
+    showToast("Shohibul qurban dihapus.");
   };
 
   const filtered = mudhohi.filter(m => {
@@ -1114,7 +1114,7 @@ function MudhohiPage({ mudhohi, setMudhohi, hewan, fonnteToken, session, addLog 
   return (
     <div>
       <Toast msg={toast.msg} type={toast.type} />
-      <SectionTitle emoji="💳" title="Mudhohi (Peserta)" sub="Kelola data peserta qurban" />
+      <SectionTitle emoji="💳" title="Shohibul Qurban" sub="Kelola data peserta qurban" />
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
         <div style={{ ...css.card, marginBottom: 0, borderLeft: `3px solid ${C.green}`, padding: "12px 16px" }}>
@@ -1154,8 +1154,8 @@ function MudhohiPage({ mudhohi, setMudhohi, hewan, fonnteToken, session, addLog 
         <div style={{ ...css.card, textAlign: "center", color: C.muted, padding: "40px 16px" }}>
           <div style={{ fontSize: 32, marginBottom: 8 }}>💳</div>
           {search || filterBayar !== "Semua" || filterJenis !== "Semua"
-            ? <div>Tidak ada mudhohi yang sesuai filter.<br /><button onClick={() => { setSearch(""); setFilterBayar("Semua"); setFilterJenis("Semua"); }} style={{ background: "none", border: "none", color: C.green, cursor: "pointer", marginTop: 8 }}>Reset filter</button></div>
-            : "Belum ada mudhohi terdaftar."
+            ? <div>Tidak ada shohibul qurban yang sesuai filter.<br /><button onClick={() => { setSearch(""); setFilterBayar("Semua"); setFilterJenis("Semua"); }} style={{ background: "none", border: "none", color: C.green, cursor: "pointer", marginTop: 8 }}>Reset filter</button></div>
+            : "Belum ada shohibul qurban terdaftar."
           }
         </div>
       )}
@@ -1193,7 +1193,7 @@ function MudhohiPage({ mudhohi, setMudhohi, hewan, fonnteToken, session, addLog 
       })}
 
       {modal && (
-        <Modal onClose={sending ? undefined : () => setModal(null)} title={`${modal === "add" ? "Tambah" : "Edit"} Mudhohi`}>
+        <Modal onClose={sending ? undefined : () => setModal(null)} title={`${modal === "add" ? "Tambah" : "Edit"} Shohibul Qurban`}>
           <fieldset disabled={sending} style={{ border: "none", padding: 0, margin: 0 }}>
             <Input label="Nama Lengkap" value={form.nama} onChange={v => setForm(p => ({ ...p, nama: v }))} error={errors.nama} />
             <div style={{ marginBottom: 14 }}>
@@ -1236,7 +1236,7 @@ function MudhohiPage({ mudhohi, setMudhohi, hewan, fonnteToken, session, addLog 
         </Modal>
       )}
 
-      {confirmId && <ConfirmModal pesan="Yakin hapus data mudhohi ini?" onConfirm={del} onCancel={() => setConfirmId(null)} />}
+      {confirmId && <ConfirmModal pesan="Yakin hapus data shohibul qurban ini?" onConfirm={del} onCancel={() => setConfirmId(null)} />}
       {notifTarget && (
         <NotifSembelihModal
           mudhohi={notifTarget}
@@ -1347,7 +1347,7 @@ function MustahiqPage({ mustahiq, setMustahiq, sesi, setSesi, session, addLog })
   const confirmDelSesi = (id) => {
     const s = sesi.find(x => x.id === id);
     const dipakai = mustahiq.some(m => m.sesi === s?.nama);
-    if (dipakai) { setSesiWarning("Sesi ini masih dipakai. Pindahkan mustahiq dulu."); return; }
+    if (dipakai) { setSesiWarning("Sesi ini masih dipakai. Pindahkan penerima daging dulu."); return; }
     setConfirmSesiId(id);
   };
 
@@ -1357,7 +1357,7 @@ function MustahiqPage({ mustahiq, setMustahiq, sesi, setSesi, session, addLog })
     setMustahiq(prev => prev.filter(x => x.id !== confirmId));
     addLog(session, "MUSTAHIQ_DELETED", "MUSTAHIQ", confirmId, m?.nama, {});
     setConfirmId(null);
-    showToast("Mustahiq dihapus.");
+    showToast("Penerima daging dihapus.");
   };
 
   const delSesi = () => {
@@ -1377,11 +1377,11 @@ function MustahiqPage({ mustahiq, setMustahiq, sesi, setSesi, session, addLog })
   return (
     <div>
       <Toast msg={toast.msg} type={toast.type} />
-      <SectionTitle emoji="🎟️" title="Distribusi Mustahiq" sub="Kelola penerima daging & sesi pengambilan" />
+      <SectionTitle emoji="🎟️" title="Penerima Daging" sub="Kelola penerima daging & sesi pengambilan" />
       <div style={{ display: "flex", gap: 6, marginBottom: 20 }}>
         {["mustahiq", "sesi"].map(t => (
           <button key={t} onClick={() => { setTab(t); setSesiWarning(""); }} style={{ ...css.btn(tab === t ? C.green : C.surface, tab === t ? "#fff" : C.muted), border: `1px solid ${C.border}`, fontSize: 13 }}>
-            {t === "mustahiq" ? "🤲 Mustahiq" : "🗓️ Sesi"}
+            {t === "mustahiq" ? "🤲 Penerima Daging" : "🗓️ Sesi"}
           </button>
         ))}
       </div>
@@ -1493,7 +1493,7 @@ function MustahiqPage({ mustahiq, setMustahiq, sesi, setSesi, session, addLog })
 
       {/* Modals */}
       {modal && (
-        <Modal onClose={() => setModal(null)} title={`${modal === "add" ? "Tambah" : "Edit"} Mustahiq`}>
+        <Modal onClose={() => setModal(null)} title={`${modal === "add" ? "Tambah" : "Edit"} Penerima Daging`}>
           <Input label="Nama" value={form.nama} onChange={v => setForm(p => ({ ...p, nama: v }))} error={errors.nama} />
           <Input label="RT / RW" value={form.rt} onChange={v => setForm(p => ({ ...p, rt: v }))} placeholder="RT 01" />
           <Input label="Alamat" value={form.alamat} onChange={v => setForm(p => ({ ...p, alamat: v }))} />
@@ -1539,7 +1539,7 @@ function MustahiqPage({ mustahiq, setMustahiq, sesi, setSesi, session, addLog })
           confirmColor={C.green}
         />
       )}
-      {confirmId && <ConfirmModal pesan="Yakin hapus data mustahiq ini?" onConfirm={delMustahiq} onCancel={() => setConfirmId(null)} />}
+      {confirmId && <ConfirmModal pesan="Yakin hapus data penerima daging ini?" onConfirm={delMustahiq} onCancel={() => setConfirmId(null)} />}
       {confirmSesiId && <ConfirmModal pesan="Yakin hapus sesi ini?" onConfirm={delSesi} onCancel={() => setConfirmSesiId(null)} />}
     </div>
   );
@@ -2038,7 +2038,7 @@ function ResetDataSection({ session, addLog }) {
       <div style={{ ...css.card, borderLeft: `3px solid ${C.red}` }}>
         <div style={{ fontWeight: 700, color: C.red, marginBottom: 8 }}>🗑️ Reset Seluruh Data</div>
         <div style={{ fontSize: 13, color: C.muted, marginBottom: 12 }}>
-          Hapus semua data hewan, mudhohi, mustahiq, RAB, dan log. Akun panitia dan token WA tidak ikut dihapus. Aksi ini tidak bisa dibatalkan.
+          Hapus semua data hewan, shohibul qurban, penerima daging, RAB, dan log. Akun panitia dan token WA tidak ikut dihapus. Aksi ini tidak bisa dibatalkan.
         </div>
         {!showResetConfirm ? (
           <Btn color={C.red} onClick={() => setShowResetConfirm(true)}>Reset Data...</Btn>
@@ -2063,8 +2063,8 @@ function ResetDataSection({ session, addLog }) {
 const NAV_BASE = [
   { id: "dashboard", emoji: "📊", label: "Dashboard" },
   { id: "hewan", emoji: "🐾", label: "Hewan" },
-  { id: "mudhohi", emoji: "💳", label: "Mudhohi" },
-  { id: "mustahiq", emoji: "🎟️", label: "Mustahiq" },
+  { id: "mudhohi", emoji: "💳", label: "Shohibul Qurban" },
+  { id: "mustahiq", emoji: "🎟️", label: "Penerima Daging" },
   { id: "rab", emoji: "💰", label: "RAB" },
   { id: "log", emoji: "📋", label: "Log" },
   { id: "settings", emoji: "⚙️", label: "Pengaturan" },
