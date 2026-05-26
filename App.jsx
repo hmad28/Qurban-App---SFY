@@ -117,7 +117,6 @@ const SEED_PANITIA = [
     id: "USR_admin",
     nama: "Admin",
     username: "admin",
-    email: "",
     passwordHash: hashPassword("admin1234"),
     role: "admin",
     status: "aktif",
@@ -302,8 +301,8 @@ function isHewanTerkunci(hewan, session) {
 // LOGIN PAGE
 // ══════════════════════════════════════════════════════════════
 // BR-AUTH-01 ~ BR-AUTH-08
-function LoginPage({ onLogin, panitiaList, setPanitiaList, addLog, onShowSignUp }) {
-  const [loginId, setLoginId] = useState(""); // username atau email
+function LoginPage({ onLogin, panitiaList, setPanitiaList, addLog }) {
+  const [username, setUsername] = useState("");
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
   const [showPass, setShowPass] = useState(false);
@@ -311,18 +310,10 @@ function LoginPage({ onLogin, panitiaList, setPanitiaList, addLog, onShowSignUp 
   const [lockMsg, setLockMsg] = useState("");
 
   const handle = () => {
-    const id = loginId.trim().toLowerCase();
-    if (!id || !pass.trim()) { setErr("Username/email dan password wajib diisi."); return; }
+    if (!username.trim() || !pass.trim()) { setErr("Username dan password wajib diisi."); return; }
 
-    const isEmail = id.includes("@");
-    const user = isEmail
-      ? panitiaList.find(u => u.email && u.email.toLowerCase() === id)
-      : panitiaList.find(u => u.username === id);
-
-    if (!user) {
-      setErr(isEmail ? "Email tidak ditemukan atau belum didaftarkan." : "Username atau password salah.");
-      return;
-    }
+    const user = panitiaList.find(u => u.username === username.toLowerCase().trim());
+    if (!user) { setErr("Username atau password salah."); return; }
 
     // BR-AUTH-03: akun nonaktif
     if (user.status === "nonaktif") {
@@ -344,7 +335,7 @@ function LoginPage({ onLogin, panitiaList, setPanitiaList, addLog, onShowSignUp 
       const locked = attempts >= 5;
       const lockedUntil = locked ? new Date(Date.now() + 15 * 60 * 1000).toISOString() : null;
       setPanitiaList(prev => prev.map(u => u.id === user.id ? { ...u, loginAttempts: attempts, lockedUntil } : u));
-      setErr("Username/email atau password salah.");
+      setErr("Username atau password salah.");
       addLog(null, "AUTH_LOGIN_FAIL", "AUTH", user.id, user.nama, { attempts });
       if (locked) setLockMsg("Akun dikunci 15 menit karena 5x gagal login.");
       return;
@@ -362,7 +353,7 @@ function LoginPage({ onLogin, panitiaList, setPanitiaList, addLog, onShowSignUp 
       mustChangePassword: user.mustChangePassword || false,
     };
     saveSession(session, remember);
-    addLog(session, "AUTH_LOGIN_OK", "AUTH", user.id, user.nama, { via: isEmail ? "email" : "username" });
+    addLog(session, "AUTH_LOGIN_OK", "AUTH", user.id, user.nama, {});
     onLogin(session);
   };
 
@@ -377,7 +368,7 @@ function LoginPage({ onLogin, panitiaList, setPanitiaList, addLog, onShowSignUp 
           <p style={{ color: C.muted, fontSize: 13, marginTop: 6 }}>Sistem Manajemen Qurban Digital · {new Date().getFullYear()} M</p>
         </div>
         <div style={{ ...css.card, padding: 28 }}>
-          <Input label="Username atau Email" value={loginId} onChange={v => { setLoginId(v); setErr(""); setLockMsg(""); }} placeholder="username atau email@contoh.com" onKeyDown={handleKey} />
+          <Input label="Username" value={username} onChange={v => { setUsername(v); setErr(""); setLockMsg(""); }} placeholder="Masukkan username" onKeyDown={handleKey} />
           <div style={{ marginBottom: 14 }}>
             <label style={css.label}>Password</label>
             <div style={{ position: "relative" }}>
@@ -397,133 +388,14 @@ function LoginPage({ onLogin, panitiaList, setPanitiaList, addLog, onShowSignUp 
           {(err || lockMsg) && <div style={{ color: C.red, fontSize: 13, marginBottom: 12 }}>⚠️ {lockMsg || err}</div>}
           <Btn color={C.green} onClick={handle} style={{ width: "100%", padding: "11px 0", fontSize: 14 }}>Masuk →</Btn>
 
-          <div style={{ marginTop: 16, borderTop: `1px solid ${C.border}`, paddingTop: 16, textAlign: "center" }}>
-            <div style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>Belum punya akun?</div>
-            <Btn color={C.blue} onClick={onShowSignUp} style={{ width: "100%", padding: "10px 0", fontSize: 13 }}>Daftar Akun Baru</Btn>
-          </div>
-
-          <div style={{ marginTop: 12, textAlign: "center", fontSize: 12, color: C.muted }}>
-            Hubungi admin jika lupa username, email, atau password.
+          <div style={{ marginTop: 14, textAlign: "center", fontSize: 12, color: C.muted }}>
+            Hubungi admin jika lupa username atau password.
           </div>
         </div>
       </div>
     </div>
   );
 }
-
-// ══════════════════════════════════════════════════════════════
-// SIGN UP PAGE
-// ══════════════════════════════════════════════════════════════
-function SignUpPage({ panitiaList, setPanitiaList, inviteCodes, setInviteCodes, onBack, addLog }) {
-  const [form, setForm] = useState({ nama: "", username: "", email: "", password: "", konfirmasi: "", kode: "" });
-  const [errors, setErrors] = useState({});
-  const [showPass, setShowPass] = useState(false);
-  const [done, setDone] = useState(false);
-  const [registeredUsername, setRegisteredUsername] = useState("");
-
-  const validate = () => {
-    const e = {};
-    if (!form.nama.trim()) e.nama = "Nama wajib diisi";
-    if (!form.username.trim()) e.username = "Username wajib diisi";
-    else if (/\s/.test(form.username)) e.username = "Username tidak boleh mengandung spasi";
-    else if (panitiaList.some(u => u.username === form.username.toLowerCase())) e.username = "Username sudah dipakai";
-    if (form.email.trim()) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(form.email.trim())) e.email = "Format email tidak valid";
-      else if (panitiaList.some(u => u.email && u.email.toLowerCase() === form.email.trim().toLowerCase())) e.email = "Email sudah dipakai akun lain";
-    }
-    if (!form.password) e.password = "Password wajib diisi";
-    else if (form.password.length < 6) e.password = "Minimal 6 karakter";
-    if (form.password !== form.konfirmasi) e.konfirmasi = "Password tidak cocok";
-    // Validasi kode undangan
-    const kode = form.kode.trim().toUpperCase();
-    if (!kode) { e.kode = "Kode undangan wajib diisi"; }
-    else {
-      const inv = inviteCodes.find(c => c.kode === kode);
-      if (!inv) e.kode = "Kode undangan tidak valid";
-      else if (inv.used) e.kode = "Kode undangan sudah pernah dipakai";
-      else if (inv.expiredAt && new Date(inv.expiredAt) < new Date()) e.kode = "Kode undangan sudah kedaluwarsa";
-    }
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
-  const handleSubmit = () => {
-    if (!validate()) return;
-    const kode = form.kode.trim().toUpperCase();
-    const newU = {
-      id: "USR_" + Date.now(),
-      nama: form.nama.trim(),
-      username: form.username.toLowerCase().trim(),
-      email: form.email.trim().toLowerCase(),
-      passwordHash: hashPassword(form.password),
-      role: "panitia",
-      status: "aktif",
-      mustChangePassword: false,
-      loginAttempts: 0,
-      lockedUntil: null,
-      createdAt: now(),
-      createdBy: "INVITE:" + kode,
-      updatedAt: now(),
-      updatedBy: "INVITE:" + kode,
-    };
-    setPanitiaList(prev => [...prev, newU]);
-    // Tandai kode sudah dipakai
-    setInviteCodes(prev => prev.map(c => c.kode === kode ? { ...c, used: true, usedBy: newU.username, usedAt: now() } : c));
-    addLog(null, "AUTH_SIGNUP_VIA_INVITE", "AUTH", newU.id, newU.nama, { username: newU.username, kode });
-    setRegisteredUsername(newU.username);
-    setDone(true);
-  };
-
-  if (done) {
-    return (
-      <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-        <div style={{ width: "100%", maxWidth: 380, textAlign: "center" }}>
-          <div style={{ fontSize: 64, marginBottom: 16 }}>✅</div>
-          <h2 style={{ color: C.white, margin: "0 0 12px" }}>Akun Berhasil Dibuat!</h2>
-          <p style={{ color: C.muted, fontSize: 14, lineHeight: 1.6, marginBottom: 24 }}>
-            Akun <strong style={{ color: C.greenLight }}>@{registeredUsername}</strong> sudah aktif. Kamu bisa langsung login sekarang.
-          </p>
-          <Btn color={C.green} onClick={onBack} style={{ width: "100%", padding: "12px 0" }}>Login Sekarang →</Btn>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div style={{ width: "100%", maxWidth: 380 }}>
-        <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <div style={{ fontSize: 52, marginBottom: 8 }}>🕌</div>
-          <h1 style={{ fontSize: 22, fontWeight: 900, color: C.white, margin: 0 }}>Daftar Akun</h1>
-          <p style={{ color: C.muted, fontSize: 13, marginTop: 6 }}>Butuh kode undangan dari admin</p>
-        </div>
-        <div style={{ ...css.card, padding: 28 }}>
-          <Input label="Nama Lengkap" value={form.nama} onChange={v => setForm(p => ({ ...p, nama: v }))} error={errors.nama} placeholder="Nama lengkap Anda" />
-          <Input label="Username" value={form.username} onChange={v => setForm(p => ({ ...p, username: v.replace(/\s/g, "").toLowerCase() }))} error={errors.username} hint="Lowercase, tanpa spasi" placeholder="contoh: budi123" />
-          <Input label="Email (opsional)" type="email" value={form.email} onChange={v => setForm(p => ({ ...p, email: v }))} error={errors.email} hint="Untuk login via email" placeholder="email@contoh.com" />
-          <div style={{ marginBottom: 14 }}>
-            <label style={css.label}>Password</label>
-            <div style={{ position: "relative" }}>
-              <input type={showPass ? "text" : "password"} value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} placeholder="Minimal 6 karakter" style={{ ...css.input, borderColor: errors.password ? C.red : C.border, paddingRight: 44 }} />
-              <button onClick={() => setShowPass(v => !v)} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14 }}>{showPass ? "🙈" : "👁"}</button>
-            </div>
-            {errors.password && <div style={{ fontSize: 11, color: C.red, marginTop: 3 }}>⚠ {errors.password}</div>}
-          </div>
-          <Input label="Konfirmasi Password" type="password" value={form.konfirmasi} onChange={v => setForm(p => ({ ...p, konfirmasi: v }))} error={errors.konfirmasi} placeholder="Ulangi password" />
-          <div style={{ marginBottom: 14 }}>
-            <label style={css.label}>Kode Undangan</label>
-            <input value={form.kode} onChange={e => setForm(p => ({ ...p, kode: e.target.value.toUpperCase() }))} placeholder="Contoh: ABCD1234" style={{ ...css.input, letterSpacing: 3, fontFamily: "monospace", borderColor: errors.kode ? C.red : C.border }} maxLength={12} />
-            {errors.kode && <div style={{ fontSize: 11, color: C.red, marginTop: 3 }}>⚠ {errors.kode}</div>}
-          </div>
-          <Btn color={C.green} onClick={handleSubmit} style={{ width: "100%", padding: "11px 0", fontSize: 14, marginTop: 4 }}>Daftar Sekarang →</Btn>
-          <button onClick={onBack} style={{ width: "100%", marginTop: 10, background: "none", border: "none", color: C.muted, fontSize: 13, cursor: "pointer", padding: "8px 0" }}>← Kembali ke Login</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 
 // ══════════════════════════════════════════════════════════════
 // GANTI PASSWORD (BR-AUTH-08)
@@ -1651,12 +1523,11 @@ function RABPage({ rab, setRab, mudhohi, session, addLog }) {
 // ══════════════════════════════════════════════════════════════
 // KELOLA AKUN (Admin Only)
 // ══════════════════════════════════════════════════════════════
-function KelolaPanitiaPage({ panitiaList, setPanitiaList, inviteCodes, setInviteCodes, session, addLog }) {
-  const [modal, setModal] = useState(null); // "add" | "edit"
-  const [form, setForm] = useState({ nama: "", username: "", email: "", password: "", role: "panitia" });
+function KelolaPanitiaPage({ panitiaList, setPanitiaList, session, addLog }) {
+  const [modal, setModal] = useState(null);
+  const [form, setForm] = useState({ nama: "", username: "", password: "", role: "panitia" });
   const [errors, setErrors] = useState({});
   const [toast, setToast] = useState({ msg: "", type: "ok" });
-  const [tabAktif, setTabAktif] = useState("akun"); // "akun" | "undangan"
 
   const showToast = (msg, type = "ok") => { setToast({ msg, type }); setTimeout(() => setToast({ msg: "", type: "ok" }), 3000); };
 
@@ -1666,11 +1537,6 @@ function KelolaPanitiaPage({ panitiaList, setPanitiaList, inviteCodes, setInvite
     if (!form.username.trim()) e.username = "Username wajib diisi";
     const dupUser = panitiaList.find(u => u.username === form.username.toLowerCase() && u.id !== form.id);
     if (dupUser) e.username = "Username sudah dipakai";
-    if (form.email && form.email.trim()) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(form.email.trim())) e.email = "Format email tidak valid";
-      else if (panitiaList.some(u => u.email && u.email.toLowerCase() === form.email.trim().toLowerCase() && u.id !== form.id)) e.email = "Email sudah dipakai akun lain";
-    }
     if (modal === "add" && !form.password.trim()) e.password = "Password wajib diisi untuk akun baru";
     if (form.password && form.password.length < 6) e.password = "Minimal 6 karakter";
     setErrors(e);
@@ -1680,17 +1546,18 @@ function KelolaPanitiaPage({ panitiaList, setPanitiaList, inviteCodes, setInvite
   const save = () => {
     if (!validate()) return;
     if (modal === "add") {
-      const newU = { id: "USR_" + Date.now(), nama: form.nama, username: form.username.toLowerCase(), email: form.email ? form.email.trim().toLowerCase() : "", passwordHash: hashPassword(form.password), role: form.role, status: "aktif", mustChangePassword: true, loginAttempts: 0, lockedUntil: null, createdAt: now(), createdBy: session.panitiaId, updatedAt: now(), updatedBy: session.panitiaId };
+      const newU = { id: "USR_" + Date.now(), nama: form.nama, username: form.username.toLowerCase(), passwordHash: hashPassword(form.password), role: form.role, status: "aktif", mustChangePassword: true, loginAttempts: 0, lockedUntil: null, createdAt: now(), createdBy: session.panitiaId, updatedAt: now(), updatedBy: session.panitiaId };
       setPanitiaList(prev => [...prev, newU]);
       addLog(session, "AUTH_ACCOUNT_CREATED", "AUTH", newU.id, newU.nama, { role: newU.role });
       showToast(`Akun "${form.nama}" berhasil dibuat.`);
     } else {
       const existing = panitiaList.find(u => u.id === form.id);
+      // BR-AUTH-05: cek minimal 1 admin aktif jika role berubah dari admin
       if (existing.role === "admin" && form.role !== "admin") {
         const activeAdmins = panitiaList.filter(u => u.role === "admin" && u.status === "aktif" && u.id !== form.id).length;
         if (activeAdmins === 0) { showToast("Harus ada minimal 1 admin aktif.", "err"); return; }
       }
-      const updated = { ...existing, nama: form.nama, username: form.username.toLowerCase(), email: form.email ? form.email.trim().toLowerCase() : (existing.email || ""), role: form.role, updatedAt: now(), updatedBy: session.panitiaId };
+      const updated = { ...existing, nama: form.nama, username: form.username.toLowerCase(), role: form.role, updatedAt: now(), updatedBy: session.panitiaId };
       if (form.password) { updated.passwordHash = hashPassword(form.password); updated.mustChangePassword = true; }
       if (existing.role !== form.role) addLog(session, "AUTH_ROLE_CHANGED", "AUTH", form.id, form.nama, { dari: existing.role, ke: form.role });
       setPanitiaList(prev => prev.map(u => u.id === form.id ? updated : u));
@@ -1699,12 +1566,15 @@ function KelolaPanitiaPage({ panitiaList, setPanitiaList, inviteCodes, setInvite
     setModal(null);
   };
 
+  // BR-AUTH-04: nonaktifkan, bukan hapus
   const toggleStatus = (u) => {
     if (u.status === "aktif") {
+      // BR-AUTH-05: cek minimal 1 admin
       if (u.role === "admin") {
         const activeAdmins = panitiaList.filter(x => x.role === "admin" && x.status === "aktif" && x.id !== u.id).length;
         if (activeAdmins === 0) { showToast("Tidak bisa menonaktifkan satu-satunya admin aktif.", "err"); return; }
       }
+      // EC-07: tidak bisa nonaktifkan diri sendiri jika admin terakhir
       if (u.id === session.panitiaId && u.role === "admin") {
         const activeAdmins = panitiaList.filter(x => x.role === "admin" && x.status === "aktif" && x.id !== u.id).length;
         if (activeAdmins === 0) { showToast("Tidak bisa menonaktifkan diri sendiri sebagai admin terakhir.", "err"); return; }
@@ -1716,126 +1586,37 @@ function KelolaPanitiaPage({ panitiaList, setPanitiaList, inviteCodes, setInvite
     showToast(`Akun "${u.nama}" ${newStatus === "nonaktif" ? "dinonaktifkan" : "diaktifkan"}.`);
   };
 
-  // ── Invite code helpers ──
-  function generateKode() {
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    return Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
-  }
-
-  const buatKode = () => {
-    const kode = generateKode();
-    const newInv = { kode, createdAt: now(), createdBy: session.panitiaId, used: false, usedBy: null, usedAt: null, expiredAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() };
-    setInviteCodes(prev => [newInv, ...prev]);
-    addLog(session, "INVITE_CREATED", "AUTH", kode, kode, {});
-    showToast(`Kode undangan ${kode} dibuat.`);
-  };
-
-  const hapusKode = (kode) => {
-    setInviteCodes(prev => prev.filter(c => c.kode !== kode));
-    addLog(session, "INVITE_DELETED", "AUTH", kode, kode, {});
-    showToast(`Kode ${kode} dihapus.`, "err");
-  };
-
-  const copyKode = (kode) => {
-    navigator.clipboard?.writeText(kode).then(() => showToast(`Kode ${kode} disalin!`)).catch(() => showToast("Gagal menyalin.", "err"));
-  };
-
-  const aktifList = panitiaList.filter(u => u.status !== "menunggu");
-  const tabStyle = (id) => ({
-    flex: 1, padding: "9px 0", background: tabAktif === id ? C.greenDark : "transparent",
-    border: "none", borderBottom: tabAktif === id ? `2px solid ${C.green}` : `2px solid transparent`,
-    color: tabAktif === id ? C.greenLight : C.muted, cursor: "pointer", fontSize: 13, fontWeight: 700,
-  });
-
   return (
     <div>
       <Toast msg={toast.msg} type={toast.type} />
-      <SectionTitle emoji="👤" title="Kelola Akun Panitia" sub="Tambah, edit, dan undangan panitia" />
-
-      {/* Tab */}
-      <div style={{ display: "flex", marginBottom: 16, borderBottom: `1px solid ${C.border}` }}>
-        <button style={tabStyle("akun")} onClick={() => setTabAktif("akun")}>👥 Daftar Akun</button>
-        <button style={tabStyle("undangan")} onClick={() => setTabAktif("undangan")}>🎟️ Kode Undangan</button>
-      </div>
-
-      {/* Tab: Daftar Akun */}
-      {tabAktif === "akun" && (
-        <div>
-          <Btn color={C.green} onClick={() => { setForm({ nama: "", username: "", email: "", password: "", role: "panitia" }); setErrors({}); setModal("add"); }} style={{ marginBottom: 16 }}>+ Tambah Akun</Btn>
-          {aktifList.map(u => (
-            <div key={u.id} style={{ ...css.card, borderLeft: `3px solid ${u.status === "aktif" ? C.green : C.muted}`, opacity: u.status === "nonaktif" ? 0.7 : 1 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8 }}>
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ fontWeight: 700, color: C.white }}>{u.nama}</div>
-                    <Pill text={u.role} color={u.role === "admin" ? C.gold : C.blue} />
-                    {u.mustChangePassword && <span style={{ ...css.badge(C.orange), fontSize: 10 }}>Ganti Pass</span>}
-                  </div>
-                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>@{u.username}</div>
-                  {u.email && <div style={{ fontSize: 11, color: C.blue, marginTop: 2 }}>✉ {u.email}</div>}
-                  {u.id === session.panitiaId && <div style={{ fontSize: 11, color: C.greenLight, marginTop: 2 }}>← Akun Anda</div>}
-                </div>
-                <Pill text={u.status} color={u.status === "aktif" ? C.green : C.muted} />
+      <SectionTitle emoji="👤" title="Kelola Akun Panitia" sub="Tambah, edit, dan kelola status akun" />
+      <Btn color={C.green} onClick={() => { setForm({ nama: "", username: "", password: "", role: "panitia" }); setErrors({}); setModal("add"); }} style={{ marginBottom: 16 }}>+ Tambah Akun</Btn>
+      {panitiaList.map(u => (
+        <div key={u.id} style={{ ...css.card, borderLeft: `3px solid ${u.status === "aktif" ? C.green : C.muted}`, opacity: u.status === "nonaktif" ? 0.7 : 1 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8 }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ fontWeight: 700, color: C.white }}>{u.nama}</div>
+                <Pill text={u.role} color={u.role === "admin" ? C.gold : C.blue} />
+                {u.mustChangePassword && <span style={{ ...css.badge(C.orange), fontSize: 10 }}>Ganti Pass</span>}
               </div>
-              <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <Btn color={C.blue} onClick={() => { setForm({ ...u, password: "" }); setErrors({}); setModal("edit"); }} style={{ fontSize: 13, padding: "8px 14px" }}>Edit</Btn>
-                <Btn color={u.status === "aktif" ? C.orange : C.green} onClick={() => toggleStatus(u)} style={{ fontSize: 13, padding: "8px 14px" }}>
-                  {u.status === "aktif" ? "Nonaktifkan" : "Aktifkan"}
-                </Btn>
-              </div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>@{u.username}</div>
+              {u.id === session.panitiaId && <div style={{ fontSize: 11, color: C.greenLight, marginTop: 2 }}>← Akun Anda</div>}
             </div>
-          ))}
-        </div>
-      )}
-
-      {/* Tab: Kode Undangan */}
-      {tabAktif === "undangan" && (
-        <div>
-          <div style={{ fontSize: 13, color: C.muted, marginBottom: 12, lineHeight: 1.6 }}>
-            Buat kode undangan dan bagikan ke calon panitia. Kode berlaku 7 hari dan hanya bisa dipakai sekali.
+            <Pill text={u.status} color={u.status === "aktif" ? C.green : C.muted} />
           </div>
-          <Btn color={C.green} onClick={buatKode} style={{ marginBottom: 16 }}>+ Buat Kode Baru</Btn>
-          {inviteCodes.length === 0 && (
-            <div style={{ ...css.card, textAlign: "center", color: C.muted, padding: "32px 16px" }}>Belum ada kode undangan.</div>
-          )}
-          {inviteCodes.map(inv => {
-            const expired = inv.expiredAt && new Date(inv.expiredAt) < new Date();
-            const statusColor = inv.used ? C.muted : expired ? C.red : C.green;
-            const statusLabel = inv.used ? "Terpakai" : expired ? "Kedaluwarsa" : "Aktif";
-            return (
-              <div key={inv.kode} style={{ ...css.card, borderLeft: `3px solid ${statusColor}`, opacity: inv.used || expired ? 0.65 : 1 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
-                  <div>
-                    <div style={{ fontFamily: "monospace", fontSize: 20, fontWeight: 900, letterSpacing: 3, color: inv.used || expired ? C.muted : C.white }}>{inv.kode}</div>
-                    <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>
-                      Dibuat: {new Date(inv.createdAt).toLocaleString("id", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-                    </div>
-                    {inv.expiredAt && !inv.used && (
-                      <div style={{ fontSize: 11, color: expired ? C.red : C.muted, marginTop: 2 }}>
-                        {expired ? "⚠ Kedaluwarsa" : "Berlaku s/d"}: {new Date(inv.expiredAt).toLocaleString("id", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
-                      </div>
-                    )}
-                    {inv.used && <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Dipakai oleh: @{inv.usedBy}</div>}
-                  </div>
-                  <Pill text={statusLabel} color={statusColor} />
-                </div>
-                <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
-                  {!inv.used && !expired && (
-                    <Btn color={C.blue} onClick={() => copyKode(inv.kode)} style={{ fontSize: 13, padding: "8px 14px" }}>📋 Salin</Btn>
-                  )}
-                  <Btn color={C.red} onClick={() => hapusKode(inv.kode)} style={{ fontSize: 13, padding: "8px 14px" }}>Hapus</Btn>
-                </div>
-              </div>
-            );
-          })}
+          <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <Btn color={C.blue} onClick={() => { setForm({ ...u, password: "" }); setErrors({}); setModal("edit"); }} style={{ fontSize: 13, padding: "8px 14px" }}>Edit</Btn>
+            <Btn color={u.status === "aktif" ? C.orange : C.green} onClick={() => toggleStatus(u)} style={{ fontSize: 13, padding: "8px 14px" }}>
+              {u.status === "aktif" ? "Nonaktifkan" : "Aktifkan"}
+            </Btn>
+          </div>
         </div>
-      )}
-
+      ))}
       {modal && (
         <Modal onClose={() => setModal(null)} title={`${modal === "add" ? "Tambah" : "Edit"} Akun`}>
           <Input label="Nama Lengkap" value={form.nama} onChange={v => setForm(p => ({ ...p, nama: v }))} error={errors.nama} />
           <Input label="Username" value={form.username} onChange={v => setForm(p => ({ ...p, username: v.toLowerCase() }))} error={errors.username} hint="Lowercase, tanpa spasi" />
-          <Input label="Email (opsional, untuk login via email)" type="email" value={form.email || ""} onChange={v => setForm(p => ({ ...p, email: v }))} error={errors.email} hint="Biarkan kosong jika tidak pakai email" />
           <Input label={modal === "add" ? "Password" : "Password Baru (kosongkan jika tidak diubah)"} type="password" value={form.password} onChange={v => setForm(p => ({ ...p, password: v }))} error={errors.password} />
           <Select label="Role" value={form.role} onChange={v => setForm(p => ({ ...p, role: v }))} options={["admin", "panitia"]} />
           <div style={{ display: "flex", gap: 8 }}>
@@ -1847,7 +1628,6 @@ function KelolaPanitiaPage({ panitiaList, setPanitiaList, inviteCodes, setInvite
     </div>
   );
 }
-
 
 // ══════════════════════════════════════════════════════════════
 // AUDIT LOG PAGE (Admin: semua; Panitia: milik sendiri)
@@ -2117,7 +1897,6 @@ export default function App() {
   });
   const [fonnteToken, setFonnteToken] = useState(() => loadStorage("qurban_token", ""));
   const [auditLog, setAuditLog] = useState(() => loadStorage("qurban_auditlog", []));
-  const [inviteCodes, setInviteCodes] = useState(() => loadStorage("qurban_invitecodes", []));
 
   useEffect(() => { saveStorage("qurban_panitia", panitiaList); }, [panitiaList]);
   useEffect(() => { saveStorage("qurban_hewan", hewan); }, [hewan]);
@@ -2127,7 +1906,6 @@ export default function App() {
   useEffect(() => { saveStorage("qurban_rab", rab); }, [rab]);
   useEffect(() => { saveStorage("qurban_token", fonnteToken); }, [fonnteToken]);
   useEffect(() => { saveStorage("qurban_auditlog", auditLog); }, [auditLog]);
-  useEffect(() => { saveStorage("qurban_invitecodes", inviteCodes); }, [inviteCodes]);
 
   // BR-LOG-01: audit log helper
   const addLog = useCallback((sess, aksi, modul, targetId, targetDesc, detail = {}) => {
@@ -2162,10 +1940,8 @@ export default function App() {
   };
 
   // BR-AUTH-08: ganti password wajib saat pertama login
-  const [showSignUp, setShowSignUp] = useState(false);
   if (!session) {
-    if (showSignUp) return <SignUpPage panitiaList={panitiaList} setPanitiaList={setPanitiaList} inviteCodes={inviteCodes} setInviteCodes={setInviteCodes} onBack={() => setShowSignUp(false)} addLog={addLog} />;
-    return <LoginPage onLogin={handleLogin} panitiaList={panitiaList} setPanitiaList={setPanitiaList} addLog={addLog} onShowSignUp={() => setShowSignUp(true)} />;
+    return <LoginPage onLogin={handleLogin} panitiaList={panitiaList} setPanitiaList={setPanitiaList} addLog={addLog} />;
   }
   if (session.mustChangePassword) {
     return <GantiPasswordModal session={session} setPanitiaList={setPanitiaList} onDone={() => { const s = { ...session, mustChangePassword: false }; saveSession(s, false); setSession(s); }} addLog={addLog} />;
@@ -2218,7 +1994,7 @@ export default function App() {
         {page === "rab" && <RABPage rab={rab} setRab={setRab} mudhohi={mudhohi} session={session} addLog={addLog} />}
         {page === "log" && <AuditLogPage auditLog={auditLog} session={session} />}
         {page === "settings" && <SettingsPage fonnteToken={fonnteToken} setFonnteToken={setFonnteToken} session={session} addLog={addLog} />}
-        {page === "panitia" && isAdmin && <KelolaPanitiaPage panitiaList={panitiaList} setPanitiaList={setPanitiaList} inviteCodes={inviteCodes} setInviteCodes={setInviteCodes} session={session} addLog={addLog} />}
+        {page === "panitia" && isAdmin && <KelolaPanitiaPage panitiaList={panitiaList} setPanitiaList={setPanitiaList} session={session} addLog={addLog} />}
       </div>
     </div>
   );
